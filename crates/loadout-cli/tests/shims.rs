@@ -66,6 +66,9 @@ fn claude_code_plugin_manifests_are_valid() {
     assert!(market["owner"]["name"].is_string());
     let entry = &market["plugins"][0];
     assert_eq!(entry["name"], "loadout");
+    // Released together with the binary.
+    assert_eq!(plugin["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(entry["version"], env!("CARGO_PKG_VERSION"));
     let src = entry["source"].as_str().unwrap();
     assert!(
         repo_root()

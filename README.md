@@ -391,7 +391,7 @@ Exit codes: `0` ok, `1` error, `2` changes pending review, `3` audit blocked,
 
 | Command | |
 |---|---|
-| `lo export [--qr] [--latest]` / `lo import <code>` | Share your exact setup as a shortcode (`lo1_…`); never contains secrets. |
+| `lo export [--qr] [--latest]` / `lo import <code> [--dry-run\|--yes] [--latest]` | Share your exact setup as a shortcode (`lo1_…`); never contains secrets. `--dry-run` shows what an import would change. The web UI's **Share setup** page does both. |
 | `lo template [list\|show <t>\|use <t> --into <source> --set k=v]` | Turn a template from a higher source into your own skill. |
 | `lo adopt [<path>...] [--into <source> \| --dir <path>] [--skill n]... [--all]` | Copy skills you already have (in your AI tools' skills folders, or a folder) into a source to share them; without `--into`/`--dir` it lists what it finds. In a terminal you pick from a list. |
 | `lo new-source [<dir>] [--layer s] [--group u] [--upstream url]... [--company-config]` | Scaffold a source (or company config) repo with an example skill, an `AGENTS.md` for AI agents and a CI audit workflow. |

@@ -150,6 +150,17 @@ fn render_qr(code: &str) -> Result<String> {
         .build())
 }
 
+/// `code` as an SVG QR code (for the web UI).
+pub fn qr_svg(code: &str) -> Result<String> {
+    let qr = qrcode::QrCode::with_error_correction_level(code.as_bytes(), qrcode::EcLevel::L)
+        .context("the shortcode is too long for a QR code")?;
+    Ok(qr
+        .render::<qrcode::render::svg::Color>()
+        .quiet_zone(true)
+        .min_dimensions(200, 200)
+        .build())
+}
+
 #[derive(Debug, Args)]
 pub struct ImportArgs {
     /// The shortcode (`lo1_…`).
@@ -160,6 +171,9 @@ pub struct ImportArgs {
     /// Apply without asking for confirmation.
     #[arg(long, short = 'y')]
     pub yes: bool,
+    /// Only show what the import would change; change nothing.
+    #[arg(long, conflicts_with = "yes")]
+    pub dry_run: bool,
 }
 
 /// What an import will change (shown before confirming).
@@ -316,6 +330,17 @@ pub fn import(ctx: &Ctx, args: ImportArgs) -> Result<u8> {
             .collect(),
         pins: pins.clone(),
     };
+
+    if args.dry_run {
+        ctx.emit(&ImportReport {
+            summary,
+            applied: false,
+            sync: None,
+            fingerprint: None,
+            warnings: Vec::new(),
+        })?;
+        return Ok(exit::OK);
+    }
 
     // Show a summary and require confirmation.
     if !args.yes {

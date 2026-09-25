@@ -432,7 +432,10 @@ fields you change are rewritten) or as a whole file, and **copied to another
 layer**: promote a team skill to the org, or clone a company skill down to
 your team or yourself and make it your own. Items show their `author` and
 `co_authors`, and you can filter by them. Nothing reaches others until a pull
-request is merged.
+request is merged. The sidebar shows the Loadout version, a link to
+the repo and, when a newer release exists, **Update available** (checked at
+most once a day; nothing installs until you run `lo self-update`; turn it off
+with `check_for_updates = false` in `config.toml`).
 
 <p align="center">
   <img src="docs/assets/tui.png" alt="lo tui: the catalog with the write-spec skill selected and its why explanation" width="760">

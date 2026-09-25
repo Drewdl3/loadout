@@ -17,6 +17,13 @@ Press Ctrl-C in the terminal to stop it.
 Every page has an **About this page** note at the top, and **? What do these
 words mean** in the sidebar opens a glossary.
 
+The bottom of the sidebar shows when you last updated, your setup's
+fingerprint, and the Loadout version with a link to its GitHub page. While
+`lo ui` runs it checks, at most once a day, whether a newer Loadout release
+exists, and if so shows **Update available**. It never installs anything:
+run `lo self-update` when you want the new version. To turn the check off,
+add `check_for_updates = false` to your `config.toml`.
+
 ## Start here
 
 Where new users land. A three-step explanation of Loadout and a checklist

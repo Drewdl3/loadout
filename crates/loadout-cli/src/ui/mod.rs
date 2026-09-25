@@ -81,6 +81,7 @@ pub fn run(ctx: &Ctx, args: UiArgs) -> Result<u8> {
     if !args.no_open {
         open_browser(&url);
     }
+    crate::update_check::check_in_background();
     let ui = Ui { ctx, token, port };
     for req in server.incoming_requests() {
         ui.handle(req);
@@ -170,6 +171,10 @@ impl Ui<'_> {
             (Method::Get, "/api/diff") => self.loadout(&["diff"]),
             (Method::Get, "/api/targets") => self.loadout(&["targets"]),
             (Method::Get, "/api/sources") => self.sources(),
+            (Method::Get, "/api/about") => match crate::update_check::about() {
+                Ok(v) => json_reply(200, &json!({"code": 0, "output": v})),
+                Err(e) => json_reply(500, &json!({"error": format!("{e:#}")})),
+            },
             (Method::Get, "/api/layers") => match layers_json(self.ctx) {
                 Ok(v) => json_reply(200, &json!({"code": 0, "output": v})),
                 Err(e) => json_reply(500, &json!({"error": format!("{e:#}")})),

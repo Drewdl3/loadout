@@ -32,12 +32,19 @@ impl Drop for Ui {
 
 impl Ui {
     fn start(s: &Sandbox, api: &str) -> Ui {
+        Ui::start_env(s, api, &[])
+    }
+
+    fn start_env(s: &Sandbox, api: &str, env: &[(&str, &str)]) -> Ui {
         let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin("lo"));
         cmd.env_clear();
         for (k, v) in s.cmd().get_envs() {
             if let Some(v) = v {
                 cmd.env(k, v);
             }
+        }
+        for (k, v) in env {
+            cmd.env(k, v);
         }
         cmd.env("LOADOUT_GITHUB_API", api)
             .env("GH_TOKEN", "gh-test-token")
@@ -735,4 +742,73 @@ fn promote_clone_down_and_edit_with_authors() {
         json!({"key": "skill/mine", "from": "ada-skills", "to": "ada-skills"}),
     );
     assert_eq!(status, 400, "same source");
+}
+
+/// A releases API whose latest release is v9.9.9.
+fn releases() -> MockServer {
+    MockServer::start(BTreeMap::from([(
+        "/releases/latest".to_owned(),
+        (200, r#"{"tag_name":"v9.9.9","assets":[]}"#.to_owned()),
+    )]))
+}
+
+/// `/api/about` once the background lookup has answered (or after ~5 s).
+fn about_when_checked(ui: &Ui) -> Value {
+    for _ in 0..50 {
+        let (status, v) = ui.get("/api/about");
+        assert_eq!(status, 200, "{v}");
+        if !v["output"]["checked_at"].is_null() {
+            return v["output"].clone();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    panic!("the update check never finished");
+}
+
+#[test]
+fn about_shows_the_version_and_a_newer_release() {
+    let s = Sandbox::new();
+    let github = MockServer::start(BTreeMap::new());
+    let rel = releases();
+    let ui = Ui::start_env(&s, github.url(), &[("LOADOUT_RELEASES_API", rel.url())]);
+    let about = about_when_checked(&ui);
+    assert_eq!(about["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(about["repo"], "https://github.com/Drewdl3/loadout");
+    assert_eq!(about["check_for_updates"], true);
+    assert_eq!(about["latest"], "9.9.9");
+    assert_eq!(about["update_available"], true);
+    let reqs = rel.requests();
+    assert_eq!(reqs.len(), 1, "{reqs:?}");
+    assert_eq!(
+        reqs[0].accept.as_deref(),
+        Some("application/vnd.github+json")
+    );
+    assert!(s.data.join("update-check.json").is_file());
+    drop(ui);
+
+    // Within a day, a restart reuses the answer instead of asking again.
+    let ui = Ui::start_env(&s, github.url(), &[("LOADOUT_RELEASES_API", rel.url())]);
+    assert_eq!(about_when_checked(&ui)["latest"], "9.9.9");
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    assert_eq!(rel.requests().len(), 1);
+}
+
+#[test]
+fn update_check_can_be_turned_off() {
+    let s = Sandbox::new();
+    std::fs::create_dir_all(&s.config).unwrap();
+    std::fs::write(s.config.join("config.toml"), "check_for_updates = false\n").unwrap();
+    let github = MockServer::start(BTreeMap::new());
+    let rel = releases();
+    let ui = Ui::start_env(&s, github.url(), &[("LOADOUT_RELEASES_API", rel.url())]);
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let (status, v) = ui.get("/api/about");
+    assert_eq!(status, 200, "{v}");
+    let about = &v["output"];
+    assert_eq!(about["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(about["check_for_updates"], false);
+    assert!(about["latest"].is_null(), "{about}");
+    assert_eq!(about["update_available"], false);
+    assert!(rel.requests().is_empty(), "{:?}", rel.requests());
+    assert!(!s.data.join("update-check.json").exists());
 }

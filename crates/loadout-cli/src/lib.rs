@@ -20,6 +20,7 @@ pub mod state;
 pub mod store;
 pub mod tui;
 pub mod ui;
+pub mod update_check;
 pub mod work;
 
 use std::process::ExitCode;

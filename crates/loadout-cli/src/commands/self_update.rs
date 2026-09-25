@@ -91,10 +91,14 @@ fn agent() -> ureq::Agent {
         .into()
 }
 
-fn get_bytes(url: &str) -> Result<Vec<u8>> {
+const OCTET: &str = "application/octet-stream";
+
+/// GETs `url`. The release JSON wants `application/vnd.github+json` (GitHub
+/// answers 415 to `application/octet-stream` there); assets want the latter.
+fn get_bytes(url: &str, accept: &str) -> Result<Vec<u8>> {
     let mut resp = agent()
         .get(url)
-        .header("Accept", "application/octet-stream")
+        .header("Accept", accept)
         .call()
         .with_context(|| format!("GET {url}"))?;
     let status = resp.status().as_u16();
@@ -118,8 +122,9 @@ pub fn run(ctx: &Ctx, args: SelfUpdateArgs) -> Result<u8> {
         Some(tag) => format!("{api}/releases/tags/{tag}"),
         None => format!("{api}/releases/latest"),
     };
-    let release: serde_json::Value = serde_json::from_slice(&get_bytes(&url)?)
-        .with_context(|| format!("unexpected response from {url}"))?;
+    let release: serde_json::Value =
+        serde_json::from_slice(&get_bytes(&url, "application/vnd.github+json")?)
+            .with_context(|| format!("unexpected response from {url}"))?;
     let tag = release["tag_name"]
         .as_str()
         .context("release has no tag_name")?
@@ -166,7 +171,10 @@ pub fn run(ctx: &Ctx, args: SelfUpdateArgs) -> Result<u8> {
     .with_context(|| format!("release {tag} has no build for {target}"))?;
     let archive_url = archive_url.context("asset has no download URL")?;
     let (_, sums_url) = find(&|n: &str| n == "SHA256SUMS").context("release has no SHA256SUMS")?;
-    let sums = String::from_utf8(get_bytes(&sums_url.context("SHA256SUMS has no URL")?)?)?;
+    let sums = String::from_utf8(get_bytes(
+        &sums_url.context("SHA256SUMS has no URL")?,
+        OCTET,
+    )?)?;
     let expected = sums
         .lines()
         .find_map(|l| {
@@ -176,7 +184,7 @@ pub fn run(ctx: &Ctx, args: SelfUpdateArgs) -> Result<u8> {
             (name == archive_name).then(|| hash.to_ascii_lowercase())
         })
         .with_context(|| format!("SHA256SUMS doesn't list {archive_name}"))?;
-    let data = get_bytes(&archive_url)?;
+    let data = get_bytes(&archive_url, OCTET)?;
     let actual: String = Sha256::digest(&data)
         .iter()
         .map(|b| format!("{b:02x}"))

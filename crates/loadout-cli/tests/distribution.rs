@@ -49,6 +49,17 @@ fn release(s: &Sandbox, tamper: bool) -> MockServer {
     })
 }
 
+/// The release JSON must be asked for as JSON: GitHub answers 415 when it's
+/// requested as `application/octet-stream`, which only suits the assets.
+fn assert_release_json_accept(server: &MockServer) {
+    let reqs = server.requests();
+    let json = reqs
+        .iter()
+        .find(|r| r.path == "/releases/latest")
+        .expect("release JSON requested");
+    assert_eq!(json.accept.as_deref(), Some("application/vnd.github+json"));
+}
+
 #[test]
 fn check_reports_a_newer_release() {
     let s = Sandbox::new();
@@ -62,6 +73,7 @@ fn check_reports_a_newer_release() {
     assert_eq!(v["latest"], "9.9.9");
     assert_eq!(v["update_available"], true);
     assert_eq!(v["updated"], false);
+    assert_release_json_accept(&server);
 }
 
 #[cfg(unix)]
@@ -95,6 +107,7 @@ fn self_update_verifies_and_replaces() {
     assert_eq!(out.code, 0, "{}", out.stderr);
     let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
     assert_eq!(v["updated"], true);
+    assert_release_json_accept(&good);
     let new = std::process::Command::new(&target_file)
         .arg("--version")
         .output()
@@ -135,4 +148,5 @@ fn install_script_installs_a_verified_release() {
     assert!(stdout.contains("Installed lo 9.9.9"), "{stdout}");
     assert!(stdout.contains("Next: lo init"), "{stdout}");
     assert!(dir.join("lo").is_file());
+    assert_release_json_accept(&server);
 }

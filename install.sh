@@ -35,16 +35,19 @@ case "$(uname -s)-$(uname -m)" in
   *) echo "install.sh: no lo build for $(uname -s) $(uname -m); try \`cargo install --git https://github.com/Drewdl3/loadout loadout-cli\`" >&2; exit 1 ;;
 esac
 
-fetch() { # url -> stdout
+# GitHub answers 415 to `Accept: application/octet-stream` on the release JSON,
+# so the JSON and the assets each get their own media type.
+fetch() { # url accept -> stdout
   if [ -n "${GH_TOKEN:-}" ]; then
-    curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/octet-stream" "$1"
+    curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: $2" "$1"
   else
-    curl -fsSL -H "Accept: application/octet-stream" "$1"
+    curl -fsSL -H "Accept: $2" "$1"
   fi
 }
+octet=application/octet-stream
 
 if [ -n "$version" ]; then rel="$api/releases/tags/$version"; else rel="$api/releases/latest"; fi
-json="$(fetch "$rel")"
+json="$(fetch "$rel" application/vnd.github+json)"
 # The release JSON lists assets as "name": … and "browser_download_url": ….
 urls="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"browser_download_url": *"\([^"]*\)".*/\1/p')"
 asset_url="$(printf '%s\n' "$urls" | grep "/lo-[^/]*-${target}\.tar\.gz\$" | head -n1 || true)"
@@ -55,8 +58,8 @@ sums_url="$(printf '%s\n' "$urls" | grep '/SHA256SUMS$' | head -n1 || true)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 name="$(basename "$asset_url")"
-fetch "$asset_url" > "$tmp/$name"
-fetch "$sums_url" > "$tmp/SHA256SUMS"
+fetch "$asset_url" "$octet" > "$tmp/$name"
+fetch "$sums_url" "$octet" > "$tmp/SHA256SUMS"
 expected="$(awk -v n="$name" '{ f=$2; sub(/^\*/, "", f); if (f == n) print $1 }' "$tmp/SHA256SUMS")"
 if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$tmp/$name" | awk '{print $1}')"
 else actual="$(shasum -a 256 "$tmp/$name" | awk '{print $1}')"; fi

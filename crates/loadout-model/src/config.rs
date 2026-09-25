@@ -27,6 +27,10 @@ pub struct Config {
     /// How often scheduled syncs re-run membership discovery.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile_refresh_interval: Option<String>,
+    /// Look for a newer Loadout release (at most once a day, while `lo ui`
+    /// runs) and say so in the web UI. Never installs anything. Default: true.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check_for_updates: Option<bool>,
     /// Cached group membership: layer → groups.
     pub profile: BTreeMap<String, Groups>,
     /// Manual subscriptions.
@@ -109,6 +113,10 @@ impl Config {
         self.sync_interval
             .as_deref()
             .unwrap_or(DEFAULT_SYNC_INTERVAL)
+    }
+
+    pub fn check_for_updates(&self) -> bool {
+        self.check_for_updates.unwrap_or(true)
     }
 
     /// The manual subscription for `url`, compared after normalization.
@@ -484,6 +492,14 @@ link_mode = "symlink"
         assert_eq!(c, Config::default());
         assert_eq!(c.sync_interval(), "1h");
         assert_eq!(c.targets.enabled, None);
+        assert!(c.check_for_updates());
+    }
+
+    #[test]
+    fn update_checks_can_be_turned_off() {
+        let c = Config::parse("check_for_updates = false\n").unwrap();
+        assert!(!c.check_for_updates());
+        assert!(Config::parse("check_for_updates = \"no\"\n").is_err());
     }
 
     #[test]

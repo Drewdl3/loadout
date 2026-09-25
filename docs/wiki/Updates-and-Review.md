@@ -84,3 +84,21 @@ lo schedule disable
 This uses your OS's own scheduler (launchd on macOS, a systemd user timer or
 cron on Linux, Task Scheduler on Windows). There's no background service.
 Pending reviews still wait for you.
+
+## Updating Loadout itself
+
+The above keeps your *skills* current. The `lo` program updates only when
+you say so:
+
+```sh
+lo self-update --check   # is there a newer release?
+lo self-update           # download it, check its SHA256SUMS, replace lo
+```
+
+`lo ui` also looks for a newer release, at most once a day, and shows
+**Update available** in the sidebar. It never installs anything by itself. To
+stop the lookups, set this in your `config.toml`:
+
+```toml
+check_for_updates = false
+```

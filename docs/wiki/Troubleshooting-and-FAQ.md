@@ -101,7 +101,9 @@ two folders above and the `lo` binary.
 
 **Does it send my data anywhere?** No. It fetches from your Git sources and,
 if your company config uses them, asks GitHub or GitLab which teams you're in.
-`lo self-update` checks GitHub for new releases. That's all.
+`lo self-update`, and `lo ui` at most once a day, ask GitHub for the latest
+Loadout release (turn the second off with `check_for_updates = false`).
+That's all.
 
 **Can I use it without a company config?** Yes. `lo subscribe` any source.
 

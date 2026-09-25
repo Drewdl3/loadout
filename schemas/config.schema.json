@@ -24,6 +24,13 @@
         "null"
       ]
     },
+    "check_for_updates": {
+      "description": "Look for a newer Loadout release (at most once a day, while `lo ui`\nruns) and say so in the web UI. Never installs anything. Default: true.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "profile": {
       "description": "Cached group membership: layer → groups.",
       "type": "object",

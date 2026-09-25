@@ -112,26 +112,49 @@ fn get_bytes(url: &str, accept: &str) -> Result<Vec<u8>> {
         .read_to_vec()?)
 }
 
-pub fn run(ctx: &Ctx, args: SelfUpdateArgs) -> Result<u8> {
+fn releases_api() -> String {
     let api = std::env::var("LOADOUT_RELEASES_API")
         .ok()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| DEFAULT_RELEASES_API.to_owned());
-    let api = api.trim_end_matches('/');
-    let url = match &args.version {
+    api.trim_end_matches('/').to_owned()
+}
+
+/// The release JSON for `tag`, or for the latest release.
+fn fetch_release(tag: Option<&str>) -> Result<serde_json::Value> {
+    let api = releases_api();
+    let url = match tag {
         Some(tag) => format!("{api}/releases/tags/{tag}"),
         None => format!("{api}/releases/latest"),
     };
-    let release: serde_json::Value =
-        serde_json::from_slice(&get_bytes(&url, "application/vnd.github+json")?)
-            .with_context(|| format!("unexpected response from {url}"))?;
+    serde_json::from_slice(&get_bytes(&url, "application/vnd.github+json")?)
+        .with_context(|| format!("unexpected response from {url}"))
+}
+
+/// The latest release's version, without a leading `v`.
+pub fn latest_version() -> Result<String> {
+    let release = fetch_release(None)?;
+    Ok(release["tag_name"]
+        .as_str()
+        .context("release has no tag_name")?
+        .trim_start_matches('v')
+        .to_owned())
+}
+
+/// Whether `latest` is newer than this build.
+pub fn is_newer(latest: &str) -> bool {
+    parse_version(latest) > parse_version(env!("CARGO_PKG_VERSION"))
+}
+
+pub fn run(ctx: &Ctx, args: SelfUpdateArgs) -> Result<u8> {
+    let release = fetch_release(args.version.as_deref())?;
     let tag = release["tag_name"]
         .as_str()
         .context("release has no tag_name")?
         .to_owned();
     let latest = tag.trim_start_matches('v').to_owned();
     let current = env!("CARGO_PKG_VERSION").to_owned();
-    let update_available = parse_version(&latest) > parse_version(&current);
+    let update_available = is_newer(&latest);
     let path = match args.path {
         Some(p) => p,
         None => std::env::current_exe().context("finding the running binary")?,

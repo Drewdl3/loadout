@@ -1519,7 +1519,7 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
 name = "loadout-audit"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "loadout-model",
  "regex",
@@ -1531,7 +1531,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1567,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-code"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "ciborium",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "loadout-model",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-git"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "loadout-git",
@@ -1602,7 +1602,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-members"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "loadout-git",
  "loadout-members",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-model"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "schemars",
  "serde",
@@ -1632,7 +1632,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-search"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "nucleo-matcher",
  "schemars",
@@ -1641,7 +1641,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-secrets"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "keyring",
  "loadout-model",
@@ -1653,7 +1653,7 @@ dependencies = [
 
 [[package]]
 name = "loadout-targets"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "junction",

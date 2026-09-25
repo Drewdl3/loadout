@@ -3,13 +3,14 @@
 //! (or the user) edits items before `lo export-source` turns the edits
 //! into a branch and a pull request.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use loadout_core::resolve::EnabledBy;
 use loadout_git::Git;
 use loadout_model::config::normalize_url;
-use loadout_model::manifest::MANIFEST_FILE;
+use loadout_model::manifest::{MANIFEST_FILE, SourcePaths};
 use loadout_model::{ItemKey, ItemKind, LayerModel, ManifestDoc};
 
 use crate::ctx::Ctx;
@@ -165,4 +166,211 @@ pub fn default_branch(git: &Git, dir: &Path) -> Result<String> {
     }
     let out = git.run(Some(dir), ["rev-parse", "--abbrev-ref", "HEAD"])?;
     Ok(out.trim().to_owned())
+}
+
+/// How a file, item or template differs from the working clone's last commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change {
+    Added,
+    Modified,
+    Removed,
+}
+
+impl Change {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Change::Added => "added",
+            Change::Modified => "modified",
+            Change::Removed => "removed",
+        }
+    }
+
+    /// An item whose files changed in different ways was modified.
+    fn merge(self, other: Change) -> Change {
+        if self == other {
+            self
+        } else {
+            Change::Modified
+        }
+    }
+}
+
+/// The uncommitted edits in a working clone, grouped by what they belong to.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Changes {
+    pub items: BTreeMap<ItemKey, Change>,
+    pub templates: BTreeMap<String, Change>,
+    /// Changed files outside any item or template (e.g. `LOADOUT.md`).
+    pub other: BTreeMap<String, Change>,
+}
+
+impl Changes {
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty() && self.templates.is_empty() && self.other.is_empty()
+    }
+}
+
+/// What `lo export-source` would propose from the working clone in `dir`.
+pub fn changes(git: &Git, dir: &Path) -> Result<Changes> {
+    let status = git.run(
+        Some(dir),
+        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    )?;
+    let text = std::fs::read_to_string(dir.join(MANIFEST_FILE))
+        .with_context(|| format!("{} has no {MANIFEST_FILE}", dir.display()))?;
+    let paths = ManifestDoc::parse(&text)?.manifest.paths;
+    Ok(classify(&paths, &parse_status(&status)))
+}
+
+/// `git status --porcelain=v1 -z` → (change, repo path). A rename is its new
+/// path added and its old path removed.
+fn parse_status(out: &str) -> Vec<(Change, String)> {
+    let mut files = Vec::new();
+    let mut records = out.split('\0').filter(|r| r.len() > 3);
+    while let Some(r) = records.next() {
+        let (xy, path) = r.split_at(3);
+        let (x, y) = (xy.as_bytes()[0], xy.as_bytes()[1]);
+        let change = match (x, y) {
+            (b'?', _) | (b'A', _) => Change::Added,
+            (b'D', _) | (_, b'D') => Change::Removed,
+            (b'R' | b'C', _) => {
+                if let Some(from) = records.next().filter(|_| x == b'R') {
+                    files.push((Change::Removed, from.to_owned()));
+                }
+                Change::Added
+            }
+            _ => Change::Modified,
+        };
+        files.push((change, path.to_owned()));
+    }
+    files
+}
+
+/// Groups changed files by the item or template they're part of, using the
+/// source's layout (`LOADOUT.md` `paths`).
+fn classify(paths: &SourcePaths, files: &[(Change, String)]) -> Changes {
+    // Most specific directory first, in case one is nested in another.
+    let mut dirs: Vec<(&str, Option<ItemKind>)> = ItemKind::ALL
+        .into_iter()
+        .map(|k| (paths.for_kind(k), Some(k)))
+        .chain([(paths.templates(), None)])
+        .collect();
+    dirs.sort_by_key(|(d, _)| std::cmp::Reverse(d.len()));
+    let mut out = Changes::default();
+    for (change, file) in files {
+        let owner = dirs.iter().find_map(|(dir, kind)| {
+            let rest = file.strip_prefix(dir)?.strip_prefix('/')?;
+            let mut parts = rest.split('/');
+            let first = parts.next()?;
+            let name = match kind {
+                None | Some(ItemKind::Skill | ItemKind::Plugin) => {
+                    parts.next()?;
+                    first.to_owned()
+                }
+                Some(ItemKind::Mcp | ItemKind::Agent) => match parts.next() {
+                    None => first.strip_suffix(".md")?.to_owned(),
+                    Some(_) => return None,
+                },
+                Some(ItemKind::Extra) => match (parts.next(), parts.next()) {
+                    (Some(n), None) => format!("{first}.{}", n.strip_suffix(".md")?),
+                    _ => return None,
+                },
+            };
+            Some(match kind {
+                Some(k) => ItemKey::new(*k, name).ok().map(Ok),
+                None => Some(Err(name)),
+            })
+        });
+        let entry = match owner.flatten() {
+            Some(Ok(key)) => out.items.entry(key),
+            Some(Err(template)) => {
+                let e = out.templates.entry(template).or_insert(*change);
+                *e = e.merge(*change);
+                continue;
+            }
+            None => {
+                out.other.insert(file.clone(), *change);
+                continue;
+            }
+        };
+        let e = entry.or_insert(*change);
+        *e = e.merge(*change);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn layout(yaml: &str) -> SourcePaths {
+        let text = format!("---\nloadout: 1\nname: s\nlayer: team\n{yaml}---\n");
+        ManifestDoc::parse(&text).unwrap().manifest.paths
+    }
+
+    #[test]
+    fn status_records_become_files() {
+        let out = "?? skills/new/SKILL.md\0 M mcp/jira.md\0 D agents/old.md\0R  skills/b/SKILL.md\0skills/a/SKILL.md\0";
+        assert_eq!(
+            parse_status(out),
+            [
+                (Change::Added, "skills/new/SKILL.md".to_owned()),
+                (Change::Modified, "mcp/jira.md".to_owned()),
+                (Change::Removed, "agents/old.md".to_owned()),
+                (Change::Removed, "skills/a/SKILL.md".to_owned()),
+                (Change::Added, "skills/b/SKILL.md".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn files_are_grouped_by_item_and_template() {
+        let files = [
+            (Change::Added, "skills/new/SKILL.md"),
+            (Change::Added, "skills/new/scripts/run.sh"),
+            (Change::Added, "skills/tweak/extra.md"),
+            (Change::Modified, "skills/tweak/SKILL.md"),
+            (Change::Removed, "agents/old.md"),
+            (Change::Modified, "extras/commands/deploy.md"),
+            (Change::Added, "templates/pr-flow/SKILL.md"),
+            (Change::Modified, "LOADOUT.md"),
+            (Change::Added, "skills/loose.md"),
+        ]
+        .map(|(c, f)| (c, f.to_owned()));
+        let got = classify(&layout(""), &files);
+        let items: Vec<_> = got.items.iter().map(|(k, c)| (k.to_string(), *c)).collect();
+        assert_eq!(
+            items,
+            [
+                ("skill/new".to_owned(), Change::Added),
+                ("skill/tweak".to_owned(), Change::Modified),
+                ("agent/old".to_owned(), Change::Removed),
+                ("extra/commands.deploy".to_owned(), Change::Modified),
+            ]
+        );
+        assert_eq!(got.templates["pr-flow"], Change::Added);
+        assert_eq!(
+            got.other.keys().collect::<Vec<_>>(),
+            ["LOADOUT.md", "skills/loose.md"]
+        );
+    }
+
+    #[test]
+    fn custom_and_nested_layouts() {
+        let paths = layout("paths:\n  skills: ai\n  templates: ai/templates\n");
+        let files = [
+            (Change::Added, "ai/templates/t/SKILL.md"),
+            (Change::Added, "ai/s/SKILL.md"),
+        ]
+        .map(|(c, f)| (c, f.to_owned()));
+        let got = classify(&paths, &files);
+        assert_eq!(got.templates["t"], Change::Added);
+        assert_eq!(
+            got.items
+                .keys()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["skill/s"]
+        );
+    }
 }

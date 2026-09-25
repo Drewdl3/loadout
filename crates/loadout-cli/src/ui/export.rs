@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 use super::{Reply, json_reply};
 use crate::ctx::Ctx;
+use crate::state::Resolved;
 use crate::work;
 
 fn param<'a>(params: &'a [(String, String)], k: &str) -> Option<&'a str> {
@@ -18,6 +19,46 @@ fn param<'a>(params: &'a [(String, String)], k: &str) -> Option<&'a str> {
 
 fn fail(e: impl std::fmt::Display) -> Reply {
     json_reply(400, &json!({ "error": format!("{e:#}") }))
+}
+
+/// `GET /api/drafts`: for each source with a working clone, the items and
+/// templates saved there but not yet proposed in a pull request. Never
+/// clones: a source nobody has edited has nothing to show.
+pub fn drafts(ctx: &Ctx) -> Reply {
+    let run = || -> anyhow::Result<Value> {
+        let Some(resolved) = Resolved::load(&ctx.paths.resolved_file())? else {
+            return Ok(json!({ "sources": [] }));
+        };
+        let git = Git::new();
+        let mut sources = Vec::new();
+        for src in &resolved.sources {
+            let dir = work::work_dir(ctx, &src.url);
+            if !dir.join(".git").exists() {
+                continue;
+            }
+            let entry = match work::changes(&git, &dir) {
+                Ok(c) if c.is_empty() => continue,
+                Ok(c) => json!({
+                    "source": src.name,
+                    "path": dir.display().to_string(),
+                    "items": c.items.iter().map(|(k, ch)| json!({ "key": k.to_string(), "change": ch.as_str() })).collect::<Vec<_>>(),
+                    "templates": c.templates.iter().map(|(n, ch)| json!({ "name": n, "change": ch.as_str() })).collect::<Vec<_>>(),
+                    "other": c.other.iter().map(|(f, ch)| json!({ "path": f, "change": ch.as_str() })).collect::<Vec<_>>(),
+                }),
+                Err(e) => json!({
+                    "source": src.name,
+                    "path": dir.display().to_string(),
+                    "error": format!("{e:#}"),
+                }),
+            };
+            sources.push(entry);
+        }
+        Ok(json!({ "sources": sources }))
+    };
+    match run() {
+        Ok(v) => json_reply(200, &json!({ "code": 0, "output": v })),
+        Err(e) => fail(e),
+    }
 }
 
 /// `GET /api/source-item?source=<name>&key=<kind/name>`: the item's main

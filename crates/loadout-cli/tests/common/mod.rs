@@ -71,7 +71,10 @@ impl Sandbox {
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", self.scratch.join("gitconfig"))
             // Never touch the real OS keychain.
-            .env("LOADOUT_TEST_KEYSTORE", self.keystore_file());
+            .env("LOADOUT_TEST_KEYSTORE", self.keystore_file())
+            // Never ask the real releases API (`lo ui` checks for updates);
+            // tests that need it point this at a MockServer.
+            .env("LOADOUT_RELEASES_API", "http://127.0.0.1:9");
         // Windows needs these to spawn processes (git) at all.
         for var in [
             "SYSTEMROOT",

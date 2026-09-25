@@ -10,7 +10,7 @@
       "name": "loadout",
       "source": "./shims/claude-code",
       "description": "/lo command, sync on session start, and skills for using the lo CLI and writing sources.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "license": "MIT"
     }
   ]

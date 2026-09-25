@@ -1,7 +1,7 @@
 {
   "name": "loadout",
   "displayName": "Loadout",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Use Loadout from Claude Code: /lo <command> (why, list, status, diff, enable, …), sync on session start, and skills that teach Claude the lo CLI and how to write sources.",
   "homepage": "https://github.com/Drewdl3/loadout",
   "license": "MIT"

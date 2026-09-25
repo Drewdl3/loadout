@@ -237,6 +237,7 @@ impl Ui<'_> {
                 Ok(body) => self.action(&body),
                 Err(e) => json_reply(400, &json!({"error": e})),
             },
+            (Method::Get, "/api/drafts") => export::drafts(self.ctx),
             (Method::Get, "/api/source-item") => export::read_item(self.ctx, &params),
             (Method::Post, "/api/source-item") => match read_json(req) {
                 Ok(body) => export::write_item(self.ctx, &body),

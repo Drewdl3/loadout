@@ -12,6 +12,11 @@ pull request.
 3. **Open a pull request**. The owners review it; once merged, your team gets
    it on their next update.
 
+Until then the skill lives only in your working copy of the source (a clone
+under Loadout's data folder, not any checkout of the repo you may have). It
+won't show in Browse skills yet; find it under **Create & edit → Not shared
+yet**, where you can keep editing it and open the pull request later.
+
 Already have skills in `~/.claude/skills` or another tool's folder? Use
 **Share skills you already have** (or `lo adopt`) to copy them into a
 source instead of retyping them.

@@ -237,6 +237,7 @@ const tabs = [
 ];
 let current = "Overview";
 let pendingCount = 0;
+let draftCount = 0;
 
 function el(tag, attrs = {}, ...kids) {
   const e = document.createElement(tag);
@@ -837,12 +838,20 @@ const views = {
     const src = el("select", { "aria-label": "Source" }, srcOptions(out.sources, opts.source));
     const key = el("input", { type: "text", placeholder: "skill/write-spec", value: opts.key || "", list: "edit-items", "aria-label": "Item" });
     const items = el("datalist", { id: "edit-items" });
-    const hits = (await api("/api/search?q=").catch(() => ({ hits: [] }))).hits;
-    const fillItems = () => items.replaceChildren(...hits.filter(h => h.source === src.value).map(h => el("option", { value: `${h.kind}/${h.name}` }, h.description || "")));
+    const [hits, drafts] = await Promise.all([
+      api("/api/search?q=").then(r => r.hits).catch(() => []),
+      api("/api/drafts").then(r => r.sources).catch(() => [])]);
+    const fillItems = () => {
+      const synced = hits.filter(h => h.source === src.value).map(h => [`${h.kind}/${h.name}`, h.description || ""]);
+      const saved = (drafts.find(d => d.source === src.value) || {}).items || [];
+      const unsynced = saved.filter(i => i.change !== "removed" && !synced.some(([k]) => k === i.key)).map(i => [i.key, "not shared yet"]);
+      items.replaceChildren(...[...unsynced, ...synced].map(([k, d]) => el("option", { value: k }, d)));
+    };
     src.onchange = fillItems;
     fillItems();
     const choice = (title, text, label, go, primary) => el("div", { class: "step3" }, el("b", {}, title), el("div", { class: "muted", style: "margin:2px 0 10px" }, text),
       el("button", { class: "btn" + (primary ? " primary" : ""), onclick: go }, label));
+    if (drafts.length) m.append(draftsCard(drafts));
     m.append(el("div", { class: "card" }, el("h2", {}, "Create something new"),
       el("div", { class: "steps3 plain" },
         choice("Write a skill", "Fill in a short form: what it's for, and the steps the AI should follow.", "Write a skill…", () => newSkill(out.sources, src.value), true),
@@ -884,11 +893,36 @@ async function exportPr(source, message) {
   } catch (e) { toast(e.message, true); }
 }
 
+// Saved in working copies but not proposed yet, per source.
+const CHANGES = { added: ["enabled", "new"], modified: ["shadowed", "changed"], removed: ["not-for-you", "removed"] };
+function draftsCard(drafts) {
+  const row = (label, change, edit) => el("div", { class: "row" },
+    el("span", { class: "pill " + CHANGES[change][0] }, CHANGES[change][1]), el("span", { class: "mono" }, label), el("span", { class: "grow" }),
+    edit ? el("button", { class: "btn", onclick: edit }, "Edit") : null);
+  return el("div", { class: "card" }, el("h2", {}, "Not shared yet"),
+    el("p", { class: "muted", style: "margin-top:0" }, "Saved in your working copy of these sources. Nobody else gets them until you open a pull request and it's merged."),
+    drafts.map(d => {
+      const n = (d.items || []).length + (d.templates || []).length + (d.other || []).length;
+      const first = (d.items || [])[0];
+      const msg = el("input", { type: "text", class: "grow", value: n === 1 && first ? `${first.change === "added" ? "Add" : first.change === "removed" ? "Remove" : "Update"} ${first.key}` : "", placeholder: "What changed (commit message and PR title)", "aria-label": `Pull request title for ${d.source}` });
+      const send = async () => { if (await exportPr(d.source, msg.value)) show("Edit", {}, true); };
+      return el("div", { style: "margin-top:12px" },
+        el("h3", { style: "margin-bottom:2px" }, d.source),
+        el("div", { class: "mono faint", style: "font-size:12px;overflow-wrap:anywhere", title: "Your working copy" }, d.path),
+        d.error ? el("div", { class: "warn" }, d.error) : [
+          ...(d.items || []).map(i => row(i.key, i.change, i.change === "removed" ? null : () => editItem(d.source, i.key))),
+          ...(d.templates || []).map(t => row("template/" + t.name, t.change, null)),
+          ...(d.other || []).map(f => row(f.path, f.change, null)),
+          el("div", { class: "row", style: "margin-top:6px" }, msg, el("button", { class: "btn primary", onclick: send }, "Open pull request"))]);
+    }));
+}
+
 // After a skill lands in a working clone: review it, or open a pull request.
 function createdCard(source, key, path, warnings) {
   const msg = el("input", { type: "text", class: "grow", value: `Add ${key}`, "aria-label": "Pull request title" });
   return el("div", { class: "card", style: "margin-top:14px" },
     el("div", { class: "ok" }, `Created ${source}:${key}`), path ? el("div", { class: "mono muted", style: "overflow-wrap:anywhere" }, path) : null,
+    el("div", { class: "muted" }, "It's saved in your working copy. Find it later under ", el("a", { href: "#Edit", onclick: e => { e.preventDefault(); show("Edit"); } }, "Create & edit → Not shared yet"), "."),
     (warnings || []).map(w => el("div", { class: "warn" }, w)),
     el("div", { class: "row", style: "margin-top:10px" }, el("button", { class: "btn", onclick: () => editItem(source, key) }, "Review in editor")),
     el("div", { class: "row" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(source, msg.value) }, "Open pull request")));
@@ -1412,7 +1446,8 @@ function renderNav() {
   nav.replaceChildren(...tabs.flatMap(([t, label, g, hint]) => [
     g !== group && (group = g) ? el("div", { class: "nav-group" }, g) : null,
     el("button", { class: t === current ? "on" : "", title: hint, "aria-current": t === current ? "page" : null, onclick: () => show(t) },
-      label, t === "Review" && pendingCount ? el("span", { class: "count" }, pendingCount) : null)]).filter(Boolean));
+      label, t === "Review" && pendingCount ? el("span", { class: "count" }, pendingCount)
+        : t === "Edit" && draftCount ? el("span", { class: "count", title: "Saved changes not shared yet" }, draftCount) : null)]).filter(Boolean));
 }
 async function refreshStatus() {
   try {
@@ -1420,6 +1455,10 @@ async function refreshStatus() {
     document.getElementById("fp").textContent = st.fingerprint || "";
     document.getElementById("last-sync").textContent = "Last updated: " + ago(st.last_sync);
     if (pendingCount !== st.pending.length) { pendingCount = st.pending.length; renderNav(); }
+  } catch (_) {}
+  try {
+    const n = (await api("/api/drafts")).sources.reduce((a, d) => a + (d.items || []).length + (d.templates || []).length + (d.other || []).length, 0);
+    if (n !== draftCount) { draftCount = n; renderNav(); }
   } catch (_) {}
   refreshAbout();
 }

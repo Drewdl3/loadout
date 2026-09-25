@@ -812,3 +812,49 @@ fn update_check_can_be_turned_off() {
     assert!(rel.requests().is_empty(), "{:?}", rel.requests());
     assert!(!s.data.join("update-check.json").exists());
 }
+
+#[test]
+fn share_page_exports_previews_and_imports() {
+    let a = Sandbox::with_claude();
+    let src = source(
+        &a,
+        "team-skills",
+        "team",
+        "payments-dev",
+        &[("skills/write-spec/SKILL.md", &skill("write-spec", "Team."))],
+    );
+    a.ok(&["subscribe", &src.url()]);
+    a.ok(&["sync"]);
+    let github = MockServer::start(BTreeMap::new());
+    let ui_a = Ui::start(&a, github.url());
+    let export = ui_a.run(&["export"]);
+    let code = export["output"]["code"].as_str().unwrap().to_owned();
+    let fp = export["output"]["fingerprint"].as_str().unwrap().to_owned();
+    assert!(code.starts_with("lo1_"), "{export}");
+    let (status, qr) = ui_a.get(&format!("/api/qr?code={code}"));
+    assert_eq!(status, 200, "{qr}");
+    assert!(
+        qr["output"]["svg"].as_str().unwrap().contains("<svg"),
+        "{qr}"
+    );
+    assert_eq!(ui_a.get("/api/qr?code=hello").0, 400);
+
+    let b = Sandbox::with_claude();
+    let ui_b = Ui::start(&b, github.url());
+    let (status, v) = ui_b.post("/api/run", json!({ "args": ["import", code] }));
+    assert_eq!(status, 403, "import needs --dry-run or --yes: {v}");
+    let preview = ui_b.run(&["import", &code, "--dry-run"]);
+    assert_eq!(preview["output"]["applied"], false);
+    assert_eq!(
+        preview["output"]["summary"]["sources"][0],
+        src.url().as_str()
+    );
+    assert!(
+        !b.config.join("config.toml").exists(),
+        "a preview writes nothing"
+    );
+    let done = ui_b.run(&["import", &code, "--yes"]);
+    assert_eq!(done["output"]["applied"], true, "{done}");
+    assert_eq!(done["output"]["fingerprint"], fp.as_str());
+    assert!(b.skills_dir().join("write-spec/SKILL.md").exists());
+}

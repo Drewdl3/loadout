@@ -36,7 +36,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("lo", {
-    description: "Run an Loadout command (why, list, status, diff, enable, disable…) and explain the result",
+    description: "Run a Loadout command (why, list, status, diff, enable, disable…) and explain the result",
     handler: async (args, ctx) => {
       const argv = splitArgs(String(args ?? "").trim());
       if (argv.length === 0) {

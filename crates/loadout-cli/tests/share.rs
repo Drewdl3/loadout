@@ -146,7 +146,7 @@ fn import_needs_confirmation_and_rejects_damaged_codes() {
     assert!(
         b.run(&["import", "hello", "--yes"])
             .stderr
-            .contains("not an Loadout shortcode")
+            .contains("not a Loadout shortcode")
     );
 }
 
@@ -176,4 +176,32 @@ fn qr_code_renders() {
         out.stdout
     );
     assert!(out.stdout.contains("lo1_"));
+}
+
+#[test]
+fn dry_run_import_shows_the_changes_and_writes_nothing() {
+    let w = world();
+    let code = w.a.json(&["export"])["code"].as_str().unwrap().to_owned();
+    let b = Sandbox::with_claude();
+    let out = b.json(&["import", &code, "--dry-run"]);
+    assert_eq!(out["applied"], false);
+    let s = &out["summary"];
+    assert_eq!(s["groups"][0], "company:acme");
+    assert!(
+        s["groups"]
+            .as_array()
+            .unwrap()
+            .contains(&"team:payments-dev".into()),
+        "{s}"
+    );
+    // Compared by name: Windows normalizes the fixture path's separators.
+    assert!(
+        s["sources"][0].as_str().unwrap().ends_with("extra-skills"),
+        "{s}"
+    );
+    assert_eq!(s["toggles"]["payments-skills:skill/runbook"], true);
+    assert!(!s["pins"].as_object().unwrap().is_empty(), "{s}");
+    assert!(!b.config.join("config.toml").exists(), "nothing written");
+    // --dry-run and --yes contradict each other.
+    assert_eq!(b.run(&["import", &code, "--dry-run", "--yes"]).code, 2);
 }

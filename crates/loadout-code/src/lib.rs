@@ -22,7 +22,7 @@ const MAX_PAYLOAD: u64 = 1 << 20;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum CodeError {
-    #[error("not an Loadout shortcode (expected it to start with {PREFIX})")]
+    #[error("not a Loadout shortcode (expected it to start with {PREFIX})")]
     Prefix,
     #[error("shortcode is malformed: {0}")]
     Malformed(String),

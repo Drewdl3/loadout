@@ -116,6 +116,24 @@ name, how many reviewers, …), and you get your own copy in your team's
 source. You can also make a new template here. See
 [Sharing skills](Sharing-Skills.md#templates).
 
+## Share setup
+
+Give someone your exact setup, or use theirs. Handy for getting a new
+teammate going in one step.
+
+- **Make a share code** gives you a code (`lo1_…`) to send, with a **Copy**
+  button and a QR code. It holds your company link, your groups, sources
+  you added, what you turned on or off, and your AI tools. It never
+  contains passwords, tokens or other secrets. Tick **Latest versions** if
+  they should get the newest of everything instead of exactly your versions.
+- **Use someone's setup**: paste their code and click **Preview** to see
+  what would change. Nothing happens until you click **Replace my setup
+  with this**, which replaces your groups, added sources, on/off choices and
+  AI tools. Afterwards your fingerprint matches theirs.
+
+They still need access to the same Git repos, and set up their own secrets.
+New users can also get here from **Start here** → **I have a share code**.
+
 ## Create & edit
 
 - **New skill**: a form that writes the `SKILL.md` for you.

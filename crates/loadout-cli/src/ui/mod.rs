@@ -171,6 +171,14 @@ impl Ui<'_> {
             (Method::Get, "/api/diff") => self.loadout(&["diff"]),
             (Method::Get, "/api/targets") => self.loadout(&["targets"]),
             (Method::Get, "/api/sources") => self.sources(),
+            // The share code as an SVG QR code (the page can't load a QR library).
+            (Method::Get, "/api/qr") => match get("code") {
+                Some(c) if c.starts_with("lo1_") => match crate::commands::share::qr_svg(&c) {
+                    Ok(svg) => json_reply(200, &json!({"code": 0, "output": {"svg": svg}})),
+                    Err(e) => json_reply(400, &json!({"error": format!("{e:#}")})),
+                },
+                _ => json_reply(400, &json!({"error": "?code=lo1_… required"})),
+            },
             (Method::Get, "/api/about") => match crate::update_check::about() {
                 Ok(v) => json_reply(200, &json!({"code": 0, "output": v})),
                 Err(e) => json_reply(500, &json!({"error": format!("{e:#}")})),
@@ -455,6 +463,29 @@ pub fn allowed(args: &[&str]) -> Result<(), String> {
             }
             _ => false,
         },
+        Some("export") => args == ["export"] || args == ["export", "--latest"],
+        // Import is previewed with --dry-run, then applied with --yes.
+        Some("import") => {
+            let (code, flags) = (
+                args.get(1).copied().unwrap_or(""),
+                &args[2.min(args.len())..],
+            );
+            !code.is_empty()
+                && !code.starts_with('-')
+                && flags
+                    .iter()
+                    .all(|f| matches!(*f, "--dry-run" | "--yes" | "--latest"))
+                && flags
+                    .iter()
+                    .filter(|f| matches!(**f, "--dry-run" | "--yes"))
+                    .count()
+                    == 1
+                && flags.len()
+                    == flags
+                        .iter()
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .len()
+        }
         _ => false,
     };
     if ok {
@@ -582,6 +613,11 @@ mod tests {
                 "https://git.example.com/acme/company-config",
                 "--non-interactive",
             ],
+            &["export"],
+            &["export", "--latest"],
+            &["import", "lo1_x", "--dry-run"],
+            &["import", "lo1_x", "--yes"],
+            &["import", "lo1_x", "--latest", "--yes"],
         ] {
             assert!(allowed(ok).is_ok(), "{ok:?}");
         }
@@ -593,6 +629,11 @@ mod tests {
             &["secrets", "set", "x"],
             &["mcp-run", "a:mcp/x"],
             &["import", "lo1_x"],
+            &["import", "lo1_x", "--dry-run", "--yes"],
+            &["import", "lo1_x", "--yes", "--yes"],
+            &["import", "--yes", "lo1_x"],
+            &["import", "lo1_x", "--latest"],
+            &["export", "--qr"],
             &["targets", "mode", "claude-code", "hardlink"],
             &["init", "https://git.example.com/acme/company-config"],
             &["init", "--new-source", "--non-interactive"],

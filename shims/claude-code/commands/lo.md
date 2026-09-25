@@ -1,5 +1,5 @@
 ---
-description: Run an Loadout command (why, list, status, diff, search, enable, disable, approve, doctor…) and explain the result.
+description: Run a Loadout command (why, list, status, diff, search, enable, disable, approve, doctor…) and explain the result.
 argument-hint: "<command> [args]   e.g. why skill/write-spec"
 allowed-tools: Bash(lo *)
 disable-model-invocation: true

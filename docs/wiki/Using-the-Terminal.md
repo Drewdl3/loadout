@@ -57,6 +57,7 @@ lo schedule enable             # sync every hour using the OS scheduler
 
 ```sh
 lo export                      # your exact setup as a short code (lo1_…)
+lo import lo1_… --dry-run      # see what it would change first
 lo import lo1_…                # reproduce someone's setup
 lo adopt                       # list skills in your AI tools you could share
 lo template list

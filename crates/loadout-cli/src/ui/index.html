@@ -60,6 +60,8 @@
   input[type=text], input[type=search], select, textarea { font:inherit; padding:6px 9px; border:1px solid var(--line-strong); border-radius:7px; background:var(--panel); color:var(--fg); min-width:0; }
   input:focus, select:focus, textarea:focus, .btn:focus-visible, nav button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
   textarea { width:100%; min-height:320px; font-family:var(--mono); font-size:12.5px; }
+  textarea.share-code { min-height:72px; word-break:break-all; }
+  .qr { margin-top:10px; } .qr svg { width:200px; height:200px; display:block; margin-top:6px; border-radius:6px; }
   pre { white-space:pre-wrap; overflow-x:auto; background:var(--sunken); border:1px solid var(--line); border-radius:8px; padding:10px; font-family:var(--mono); font-size:12px; margin:8px 0 0; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .row + .row { margin-top:8px; }
@@ -229,6 +231,7 @@ const tabs = [
   ["Review", "Updates", "Use", "Changes waiting for your OK"],
   ["Sources", "Sources", "Share", "Where skills come from"],
   ["Templates", "Templates", "Share", "Fill-in-the-blanks skills"],
+  ["Share", "Share setup", "Share", "Give your exact setup to someone, or use theirs"],
   ["Edit", "Create & edit", "Share", "Write skills and propose changes"],
   ["Doctor", "Health check", "Fix", "Problems with this computer's setup"],
 ];
@@ -323,6 +326,8 @@ const HELP = {
     "If your company uses Loadout, its list of groups (the company config) adds the right sources for you. You can also add any source by its address, and preview it first."],
   Templates: ["A template is a skill with blanks, such as {{team}}. Pick one, answer a few questions, and you get your own copy for your team.",
     "You can also make a template for other teams: write the skill once, and mark the parts each team should fill in."],
+  Share: ["Give someone your exact setup as a short code: they paste it here (or run lo import) and get the same groups, sources, on/off choices and AI tools.",
+    "Codes never contain passwords or tokens. Whoever imports still needs access to the same Git repos, and sets up their own secrets."],
   Edit: ["Write a new skill, make a template, or change something your team shares.",
     "Your changes are kept in a private working copy. When you're ready, open a pull request: the source's owners review it, and once they accept it, everyone gets it the next time they update."],
   Doctor: ["Checks this computer for problems: missing apps, broken links, two things with the same name, secrets saved where they shouldn't be.",
@@ -431,7 +436,7 @@ const views = {
     const steps = [
       { done: sources > 0, t: "Connect to your team's skills", d: sources ? `${sources} source(s) connected.` : "If your company uses Loadout, it has probably sent you a link: connect with it and you're set up for your groups. Or add a single source by its address.",
         act: sources ? el("button", { class: "btn", onclick: () => show("Sources") }, "See sources")
-          : el("div", { class: "row" }, el("button", { class: "btn primary", onclick: connectCompany }, "I have my company's link"), el("button", { class: "btn", onclick: () => show("Sources") }, "Add a source")) },
+          : el("div", { class: "row" }, el("button", { class: "btn primary", onclick: connectCompany }, "I have my company's link"), el("button", { class: "btn", onclick: () => show("Sources") }, "Add a source"), el("button", { class: "btn", title: "Someone gave you a code (lo1_…) with their setup", onclick: () => show("Share") }, "I have a share code")) },
       { done: tools.length > 0, t: "Choose your AI tools", d: tools.length ? "Set up: " + tools.join(", ") + "." : "Tell Loadout which AI apps you use on this computer.",
         act: el("button", { class: "btn", onclick: () => show("Targets") }, "Pick AI tools") },
       { done: sources > 0 && !!st.last_sync, t: "Get the latest skills", d: st.last_sync ? `Last updated ${ago(st.last_sync)}. Update again any time; it's safe.` : "Download everything from your sources and install it into your AI tools.",
@@ -717,6 +722,85 @@ const views = {
         el("div", { class: "muted", style: "margin-top:4px" }, t.variables.length ? "Asks for: " + t.variables.map(v => v.default === undefined ? v.name : `${v.name} (default ${v.default})`).join(", ") : "Nothing to fill in"),
         el("div", {}, (t.tags || []).map(x => el("span", { class: "chip" }, x)))));
     }
+  },
+
+  // `lo export` / `lo import` as two cards: give your setup, use someone else's.
+  async Share(m, opts = {}) {
+    m.append(pageHead("Share", "Give your exact setup to someone else, or use theirs."));
+
+    const latest = el("input", { type: "checkbox" });
+    const made = el("div");
+    const make = async () => {
+      made.replaceChildren(el("div", { class: "muted" }, "Making a code…"));
+      try {
+        const out = await api("/api/run", { args: latest.checked ? ["export", "--latest"] : ["export"] });
+        const box = el("textarea", { class: "share-code", readonly: true, "aria-label": "Share code" }, out.code);
+        const qr = el("div", { class: "qr" });
+        made.replaceChildren(box,
+          el("div", { class: "row", style: "margin-top:8px" },
+            el("button", { class: "btn primary", onclick: async () => {
+              try { await navigator.clipboard.writeText(out.code); toast("Copied"); }
+              catch (_) { box.select(); toast("Press Ctrl-C (⌘C) to copy"); }
+            } }, "Copy"),
+            el("span", { class: "muted" }, out.pinned ? "Exact versions: they get the same setup you have." : "Latest versions: they get the newest of everything.")),
+          el("div", { class: "faint", style: "margin-top:4px" }, "Fingerprint ", el("span", { class: "mono" }, out.fingerprint), " (theirs matches after importing an exact code)"),
+          qr);
+        try {
+          const svg = new DOMParser().parseFromString((await api("/api/qr?code=" + encodeURIComponent(out.code))).svg, "image/svg+xml").documentElement;
+          svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "QR code of the share code");
+          qr.replaceChildren(el("div", { class: "muted" }, "Or scan it:"), svg);
+        } catch (_) { /* codes too long for a QR code still work as text */ }
+      } catch (e) { made.replaceChildren(el("div", { class: "bad" }, e.message)); }
+    };
+    m.append(el("div", { class: "card" },
+      el("h2", {}, "Give your setup to someone"),
+      el("p", { class: "muted" }, "Makes a code with your company link, your groups, extra sources, what you turned on or off, and your AI tools. It never contains passwords, tokens or other secrets."),
+      el("div", { class: "row" },
+        el("button", { class: "btn primary", onclick: make }, "Make a share code"),
+        el("label", { class: "row muted" }, latest, "Latest versions instead of exactly mine")),
+      made));
+
+    const code = el("textarea", { class: "share-code", placeholder: "lo1_…", "aria-label": "Share code to use" }, opts.code || "");
+    const theirsLatest = el("input", { type: "checkbox" });
+    const result = el("div");
+    const args = (mode) => ["import", code.value.trim(), ...(theirsLatest.checked ? ["--latest"] : []), mode];
+    const li = (label, items) => items && items.length ? el("li", {}, el("b", {}, label + ": "), items.join(", ")) : null;
+    const preview = async () => {
+      if (!code.value.trim()) { toast("Paste a share code first", true); return; }
+      result.replaceChildren(el("div", { class: "muted" }, "Reading the code…"));
+      try {
+        const s = (await api("/api/run", { args: args("--dry-run") })).summary;
+        const onOff = Object.entries(s.toggles || {}).map(([k, v]) => `${k} ${v ? "on" : "off"}`);
+        result.replaceChildren(el("div", { class: "card", style: "margin:12px 0 0" },
+          el("h3", {}, "This will set you up with"),
+          el("ul", {},
+            s.company_config ? el("li", {}, el("b", {}, "Company link: "), s.company_config) : null,
+            li("Groups", s.groups), li("Extra sources", s.sources), li("Remove sources", s.unsubscribed),
+            li("Turned on/off", onOff), li("AI tools", s.targets),
+            el("li", {}, el("b", {}, "Versions: "), Object.keys(s.pins || {}).length ? "exactly the ones in the code" : "the latest of everything")),
+          s.missing_commits.length ? el("p", { class: "muted" }, `Needs to download ${s.missing_commits.length} version(s) this computer doesn't have yet.`) : null,
+          el("p", { class: "warn" }, "This replaces your current groups, extra sources, on/off choices and AI tools."),
+          el("div", { class: "row" },
+            el("button", { class: "btn primary", onclick: async (e) => {
+              e.target.disabled = true;
+              try {
+                const out = await api("/api/run", { args: args("--yes") });
+                toast("Imported. Your setup now matches the code." + ((out.warnings || []).length ? "\n" + out.warnings.join("\n") : ""));
+                result.replaceChildren(el("div", { class: "card ok" }, "Done. ", out.fingerprint ? ["Fingerprint ", el("span", { class: "mono" }, out.fingerprint), "."] : null));
+                refreshStatus();
+              } catch (err) { e.target.disabled = false; toast(err.message, true); }
+            } }, "Replace my setup with this"),
+            el("button", { class: "btn", onclick: () => result.replaceChildren() }, "Cancel"))));
+      } catch (e) { result.replaceChildren(el("div", { class: "bad" }, e.message)); }
+    };
+    m.append(el("div", { class: "card" },
+      el("h2", {}, "Use someone's setup"),
+      el("p", { class: "muted" }, "Paste the code someone gave you. You'll see what changes before anything happens."),
+      code,
+      el("div", { class: "row", style: "margin-top:8px" },
+        el("button", { class: "btn primary", onclick: preview }, "Preview"),
+        el("label", { class: "row muted" }, theirsLatest, "Use the latest versions instead of the exact ones")),
+      result));
   },
 
   async Targets(m) {
@@ -1344,11 +1428,11 @@ async function refreshAbout() {
   try {
     const ab = await api("/api/about");
     const ext = { target: "_blank", rel: "noopener noreferrer" };
-    document.getElementById("about").replaceChildren(
+    document.getElementById("about").replaceChildren(...[
       el("a", { href: ab.repo, title: "Loadout on GitHub", ...ext }, `Loadout v${ab.version}`),
       ab.update_available ? el("div", {},
         el("a", { class: "update", href: `${ab.repo}/releases/latest`, title: "What's new in this release", ...ext }, `Update available: v${ab.latest}`),
-        el("div", {}, "Install it with ", el("span", { class: "mono" }, "lo self-update"))) : null);
+        el("div", {}, "Install it with ", el("span", { class: "mono" }, "lo self-update"))) : null].filter(Boolean));
     return ab;
   } catch (_) { return null; }
 }

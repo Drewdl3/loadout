@@ -282,7 +282,7 @@ fn agents_md(name: &str, layer: &str, group: &str, company_config: bool) -> Stri
     let what = if company_config {
         "the company **company config**: the root source that also lists layers, groups and policy under `company:` in `LOADOUT.md`"
     } else {
-        "an Loadout **source**"
+        "a Loadout **source**"
     };
     let company_config_notes = if company_config {
         "\n## The company config\n\n- `company.layers`: layer names and ranks. The higher rank wins when two\n  sources provide the same item. `company` is required.\n- `company.groups`: one entry per group: `layer`, `name`, `sources: [urls]`,\n  `membership:` (`github_team`, `gitlab_group`, `env`, `exec`,\n  `repo_access`, `manual`, `any`/`all`).\n- `company.policy`: `auto_apply` (layers whose updates skip review),\n  `allow_manual_sources`, `require_signed`.\n- Items here have layer `company`: everyone gets them. Use\n  `mode: required` + `locked: true` only for what must not be turned off.\n"

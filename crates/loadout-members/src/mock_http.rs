@@ -1,6 +1,7 @@
 //! A tiny loopback HTTP server for tests (feature `test-support`). Serves
 //! fixed JSON responses by path and records each request's path and
-//! `Authorization` header. Loopback only — tests never use the network.
+//! `Authorization` and `Accept` headers. Loopback only — tests never use the
+//! network.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
@@ -15,6 +16,7 @@ pub struct Request {
     pub method: String,
     pub path: String,
     pub authorization: Option<String>,
+    pub accept: Option<String>,
     pub body: String,
 }
 
@@ -67,6 +69,7 @@ impl MockServer {
                 let method = line.split_whitespace().next().unwrap_or("").to_owned();
                 let path = line.split_whitespace().nth(1).unwrap_or("").to_owned();
                 let mut authorization = None;
+                let mut accept = None;
                 let mut length = 0usize;
                 loop {
                     let mut h = String::new();
@@ -76,6 +79,8 @@ impl MockServer {
                     if let Some((k, v)) = h.split_once(':') {
                         if k.eq_ignore_ascii_case("authorization") {
                             authorization = Some(v.trim().to_owned());
+                        } else if k.eq_ignore_ascii_case("accept") {
+                            accept = Some(v.trim().to_owned());
                         } else if k.eq_ignore_ascii_case("content-length") {
                             length = v.trim().parse().unwrap_or(0);
                         }
@@ -87,6 +92,7 @@ impl MockServer {
                     method,
                     path: path.clone(),
                     authorization,
+                    accept,
                     body: String::from_utf8_lossy(&body).into_owned(),
                 });
                 let (status, body) = routes

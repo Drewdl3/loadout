@@ -1,0 +1,398 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/why.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WhyReport",
+  "description": "`--json` output of `lo why`.",
+  "type": "object",
+  "properties": {
+    "key": {
+      "$ref": "#/$defs/ItemKey"
+    },
+    "winner": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ItemId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rule": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Rule"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "enabled_by": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EnabledBy"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "candidates": {
+      "description": "Every candidate, winner first.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Trail"
+      }
+    },
+    "targets": {
+      "description": "Where the item goes in each enabled target.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TargetPlacement"
+      }
+    },
+    "warnings": {
+      "description": "Resolution warnings about this item.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "key",
+    "enabled",
+    "candidates",
+    "targets",
+    "warnings"
+  ],
+  "$defs": {
+    "ItemKey": {
+      "description": "`kind/name`",
+      "type": "string"
+    },
+    "ItemId": {
+      "description": "`source:kind/name`",
+      "type": "string"
+    },
+    "Rule": {
+      "description": "How the winner was chosen.",
+      "oneOf": [
+        {
+          "description": "It was the only eligible candidate.",
+          "type": "string",
+          "const": "only"
+        },
+        {
+          "description": "The most general locked / non-overridable candidate wins outright.",
+          "type": "string",
+          "const": "locked"
+        },
+        {
+          "description": "The most specific (highest-rank) candidate wins.",
+          "type": "string",
+          "const": "highest_rank"
+        },
+        {
+          "description": "Equal rank; higher source priority.",
+          "type": "string",
+          "const": "priority"
+        },
+        {
+          "description": "Equal rank; the user's `lo prefer` choice (beats priority).",
+          "type": "string",
+          "const": "preferred"
+        },
+        {
+          "description": "Equal rank and priority; lexicographically first source id.",
+          "type": "string",
+          "const": "conflict_tie_break"
+        }
+      ]
+    },
+    "EnabledBy": {
+      "type": "string",
+      "enum": [
+        "required",
+        "default",
+        "toggle"
+      ]
+    },
+    "Trail": {
+      "description": "Why a candidate did or did not win.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ItemId"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rank": {
+          "description": "`None` for layers missing from the layer model.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "priority": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "overridable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "layer",
+        "priority",
+        "locked",
+        "overridable"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "const": "winner"
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        },
+        {
+          "description": "Filtered: the profile doesn't contain the item's group.",
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "const": "not_member"
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        },
+        {
+          "description": "Filtered: the item's layer isn't defined in the layer model.",
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "const": "unknown_layer"
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        },
+        {
+          "description": "Filtered: `applies_to` didn't match on this axis.",
+          "type": "object",
+          "properties": {
+            "axis": {
+              "type": "string"
+            },
+            "outcome": {
+              "type": "string",
+              "const": "applies_to"
+            }
+          },
+          "required": [
+            "outcome",
+            "axis"
+          ]
+        },
+        {
+          "description": "Filtered: the item's `targets` list excludes the target.",
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "const": "target_excluded"
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        },
+        {
+          "description": "Lost to a more specific (higher-rank) candidate.",
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "outcome": {
+              "type": "string",
+              "const": "outranked"
+            }
+          },
+          "required": [
+            "outcome",
+            "by"
+          ]
+        },
+        {
+          "description": "Tried to shadow a locked / non-overridable item from a more general\nlayer (`blocked_override`).",
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "outcome": {
+              "type": "string",
+              "const": "blocked_override"
+            }
+          },
+          "required": [
+            "outcome",
+            "by"
+          ]
+        },
+        {
+          "description": "Lost to a locked / non-overridable candidate at a lower or equal rank.",
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "outcome": {
+              "type": "string",
+              "const": "lost_to_locked"
+            }
+          },
+          "required": [
+            "outcome",
+            "by"
+          ]
+        },
+        {
+          "description": "Equal rank; the winner's source has a higher priority.",
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "outcome": {
+              "type": "string",
+              "const": "lower_priority"
+            }
+          },
+          "required": [
+            "outcome",
+            "by"
+          ]
+        },
+        {
+          "description": "Equal rank; the user preferred the winner (`lo prefer`).",
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "outcome": {
+              "type": "string",
+              "const": "not_preferred"
+            }
+          },
+          "required": [
+            "outcome",
+            "by"
+          ]
+        },
+        {
+          "description": "Equal rank and priority: an unresolved conflict, broken by source id.",
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "outcome": {
+              "type": "string",
+              "const": "conflict_tie_break"
+            }
+          },
+          "required": [
+            "outcome",
+            "by"
+          ]
+        }
+      ]
+    },
+    "TargetPlacement": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "id": {
+          "description": "The winner for this target, if the item is installed there.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "installed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "target",
+        "installed"
+      ]
+    },
+    "LinkMode": {
+      "description": "How items are placed into a target directory.",
+      "oneOf": [
+        {
+          "description": "Symlink (Unix) or NTFS junction (Windows) into the store.",
+          "type": "string",
+          "const": "symlink"
+        },
+        {
+          "description": "Copy files out of the store.",
+          "type": "string",
+          "const": "copy"
+        }
+      ]
+    }
+  }
+}

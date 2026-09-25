@@ -1,0 +1,231 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Config",
+  "type": "object",
+  "properties": {
+    "company_config": {
+      "description": "URL of the company config repo, once `lo init` has run.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sync_interval": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "profile_refresh_interval": {
+      "description": "How often scheduled syncs re-run membership discovery.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "profile": {
+      "description": "Cached group membership: layer → groups.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Groups"
+      },
+      "default": {}
+    },
+    "source": {
+      "description": "Manual subscriptions.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceSub"
+      },
+      "default": []
+    },
+    "toggles": {
+      "description": "User overrides: item id → enabled.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "default": {}
+    },
+    "membership": {
+      "description": "Manual membership choices (`lo join` / `leave` / `profile set`).",
+      "$ref": "#/$defs/Membership"
+    },
+    "prefer": {
+      "description": "Equal-rank conflict choices (`lo prefer`): `kind/name` → source.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "targets": {
+      "$ref": "#/$defs/TargetsConfig",
+      "default": {
+        "link_mode": "symlink"
+      }
+    },
+    "secrets": {
+      "description": "Secret handling.",
+      "$ref": "#/$defs/SecretsConfig"
+    },
+    "policy": {
+      "description": "Local review policy.",
+      "$ref": "#/$defs/PolicyConfig"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Groups": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "SourceSub": {
+      "description": "A manual source subscription (`[[source]]`).",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "layer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "Tie-breaker among equal-rank sources; higher wins.",
+          "type": "integer",
+          "format": "int64",
+          "default": 0
+        },
+        "ref": {
+          "description": "Optional branch, tag or commit to track instead of the default branch.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ]
+    },
+    "Membership": {
+      "description": "Groups the user joined or left by hand, as `layer:group`. Discovery\nresults are combined with these on every profile refresh.",
+      "type": "object",
+      "properties": {
+        "joined": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "left": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "TargetsConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enabled target ids. `None` means \"not chosen yet\": targets whose\n`detect` paths exist are used.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "link_mode": {
+          "$ref": "#/$defs/LinkMode",
+          "default": "symlink"
+        },
+        "modes": {
+          "description": "Per-target link mode overrides.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/LinkMode"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "LinkMode": {
+      "description": "How items are placed into a target directory.",
+      "oneOf": [
+        {
+          "description": "Symlink (Unix) or NTFS junction (Windows) into the store.",
+          "type": "string",
+          "const": "symlink"
+        },
+        {
+          "description": "Copy files out of the store.",
+          "type": "string",
+          "const": "copy"
+        }
+      ]
+    },
+    "SecretsConfig": {
+      "description": "`[secrets]`: local secret settings.",
+      "type": "object",
+      "properties": {
+        "chain": {
+          "description": "Overrides the company config's resolver chain for `secret://` references.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "allow_secrets_on_disk": {
+          "description": "Allow writing resolved secrets into target configs when no safer\ndelivery exists.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "PolicyConfig": {
+      "description": "`[policy]`: local additions to the company config's review policy.",
+      "type": "object",
+      "properties": {
+        "auto_apply": {
+          "description": "Sources (`LOADOUT.md` name or URL) whose updates apply without\nreview, in addition to the company config's `auto_apply` layers.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

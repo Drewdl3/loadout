@@ -1,0 +1,138 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/search.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SearchReport",
+  "description": "`--json` output of `lo search`.",
+  "type": "object",
+  "properties": {
+    "hits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Hit"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "hits",
+    "warnings"
+  ],
+  "$defs": {
+    "Hit": {
+      "description": "One searchable item.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "`source:kind/name`.",
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "product": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "roles": {
+          "description": "Roles from `applies_to.role`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "co_authors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/State"
+        },
+        "score": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "source",
+        "layer",
+        "state",
+        "score"
+      ]
+    },
+    "State": {
+      "description": "Where an item stands for this user.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        {
+          "description": "Another source's item with the same name wins.",
+          "type": "string",
+          "const": "shadowed"
+        },
+        {
+          "description": "Not for this profile (group, `applies_to`, targets).",
+          "type": "string",
+          "const": "not-for-you"
+        },
+        {
+          "description": "From a company config source you're not subscribed to (`--all-sources`).",
+          "type": "string",
+          "const": "not-subscribed"
+        }
+      ]
+    }
+  }
+}

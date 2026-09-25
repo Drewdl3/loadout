@@ -1,0 +1,537 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Manifest",
+  "description": "Parsed `LOADOUT.md` frontmatter.",
+  "type": "object",
+  "properties": {
+    "loadout": {
+      "description": "Manifest schema version.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "name": {
+      "description": "Stable source id, kebab-case.",
+      "type": "string"
+    },
+    "layer": {
+      "description": "Default layer for items in this repo.",
+      "type": "string"
+    },
+    "group": {
+      "description": "Default group. Required unless the company config maps this source to a group.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "owners": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "defaults": {
+      "description": "Defaults applied to every item in this source.",
+      "$ref": "#/$defs/LoadoutBlock",
+      "default": {}
+    },
+    "paths": {
+      "$ref": "#/$defs/SourcePaths",
+      "default": {
+        "skills": "skills/",
+        "mcp": "mcp/",
+        "agents": "agents/",
+        "plugins": "plugins/",
+        "extras": "extras/",
+        "templates": "templates/"
+      }
+    },
+    "upstream": {
+      "description": "Higher sources this one builds on. Subscribing to this source also\ninstalls theirs, each at its own layer and group.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Upstream"
+      }
+    },
+    "company": {
+      "description": "Company config block (only in the company config source), kept\nverbatim here.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompanyConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "loadout",
+    "name",
+    "layer"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "LoadoutBlock": {
+      "description": "The `loadout:` block in item frontmatter, also used for `LOADOUT.md`\n`defaults:`. Every field is optional; unset fields fall back to the\nsource defaults, then to built-in defaults.",
+      "type": "object",
+      "properties": {
+        "layer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "applies_to": {
+          "description": "Axis → allowed groups. All listed axes must match (AND); values within\nan axis are alternatives (OR).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "product": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Mode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locked": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "overridable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "targets": {
+          "description": "Optional include-list of target ids.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "author": {
+          "description": "Who wrote the item, e.g. `Ada Lovelace` or `Ada Lovelace <ada@example.com>`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "co_authors": {
+          "description": "Other people who contributed to it. A single string is accepted\ntoo; `coAuthors` / `coAuthor` are accepted as spellings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "Mode": {
+      "description": "How an item's enabled state is decided.",
+      "oneOf": [
+        {
+          "description": "Always enabled; user toggles are ignored.",
+          "type": "string",
+          "const": "required"
+        },
+        {
+          "description": "Enabled unless the user toggles it off.",
+          "type": "string",
+          "const": "default-on"
+        },
+        {
+          "description": "Disabled unless the user toggles it on.",
+          "type": "string",
+          "const": "default-off"
+        }
+      ]
+    },
+    "SourcePaths": {
+      "description": "Directories (relative to the repo root) holding each item kind.",
+      "type": "object",
+      "properties": {
+        "skills": {
+          "type": "string",
+          "default": "skills/"
+        },
+        "mcp": {
+          "type": "string",
+          "default": "mcp/"
+        },
+        "agents": {
+          "type": "string",
+          "default": "agents/"
+        },
+        "plugins": {
+          "type": "string",
+          "default": "plugins/"
+        },
+        "extras": {
+          "type": "string",
+          "default": "extras/"
+        },
+        "templates": {
+          "description": "Templates; never installed.",
+          "type": "string",
+          "default": "templates/"
+        }
+      }
+    },
+    "Upstream": {
+      "description": "An entry of `upstream:`: a Git URL (or path), optionally with a ref.\nA URL starting with `./` or `../` is relative to the declaring source's\nown URL, like a Git submodule URL (`../eng-skills` is a sibling repo).",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "ref": {
+              "description": "Branch, tag or commit to follow instead of the default branch.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      ]
+    },
+    "CompanyConfig": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The company's name: its group everyone is in.",
+          "type": "string"
+        },
+        "layers": {
+          "description": "Layer ranks; higher is more specific.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Layer"
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupDef"
+          },
+          "default": []
+        },
+        "policy": {
+          "$ref": "#/$defs/Policy",
+          "default": {
+            "auto_apply": [],
+            "require_signed": [],
+            "allow_manual_sources": true
+          }
+        },
+        "secrets": {
+          "description": "Secret settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompanySecrets"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "signers": {
+          "description": "Allowed commit signers for `policy.require_signed` layers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Signer"
+          }
+        },
+        "audit_rules": {
+          "description": "Extra audit rules path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "layers"
+      ]
+    },
+    "Layer": {
+      "description": "A layer type with its rank (specificity); higher ranks win ties.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "name",
+        "rank"
+      ]
+    },
+    "GroupDef": {
+      "description": "A named instance of a layer and the sources it publishes.",
+      "type": "object",
+      "properties": {
+        "layer": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "membership": {
+          "description": "How membership is discovered. Omitted means `{ manual: true }`.",
+          "$ref": "#/$defs/Rule",
+          "default": {
+            "manual": true
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "layer",
+        "name"
+      ]
+    },
+    "Rule": {
+      "description": "A membership rule. Written as a single-key map, e.g.\n`{ github_team: \"acme/eng\" }` or `{ any: [ … ] }`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "manual": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "manual"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "github_team": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "github_team"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gitlab_group": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "gitlab_group"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "env"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exec": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "exec"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "repo_access": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "repo_access"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "any": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Rule"
+              }
+            }
+          },
+          "required": [
+            "any"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Rule"
+              }
+            }
+          },
+          "required": [
+            "all"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Policy": {
+      "type": "object",
+      "properties": {
+        "auto_apply": {
+          "description": "Layers whose updates apply without review.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "require_signed": {
+          "description": "Layers whose commits must be signed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "allow_manual_sources": {
+          "description": "May users subscribe to repos not listed in the company config?",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "CompanySecrets": {
+      "description": "`company.secrets`.",
+      "type": "object",
+      "properties": {
+        "chain": {
+          "description": "Resolver chain for `secret://name`: `env`, `keychain`, or reference\ntemplates containing `{name}`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "Signer": {
+      "description": "An allowed commit signer: an SSH public key or an armored GPG\npublic key.",
+      "type": "object",
+      "properties": {
+        "principal": {
+          "description": "Who this is (shown when a signature verifies), e.g. an email.",
+          "type": "string"
+        },
+        "ssh": {
+          "description": "`ssh-ed25519 AAAA…` (as in an `allowed_signers` file, without the\nprincipal).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gpg": {
+          "description": "An ASCII-armored OpenPGP public key.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "principal"
+      ]
+    }
+  }
+}

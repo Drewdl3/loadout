@@ -1,0 +1,50 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/schedule.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ScheduleReport",
+  "description": "`--json` output of `lo schedule`.",
+  "type": "object",
+  "properties": {
+    "backend": {
+      "$ref": "#/$defs/Backend"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "interval": {
+      "description": "`sync_interval`.",
+      "type": "string"
+    },
+    "entry": {
+      "description": "The scheduler entry (a file path, or `crontab`).",
+      "type": "string"
+    },
+    "log": {
+      "type": "string"
+    },
+    "last_sync": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "backend",
+    "enabled",
+    "interval",
+    "entry",
+    "log"
+  ],
+  "$defs": {
+    "Backend": {
+      "type": "string",
+      "enum": [
+        "launchd",
+        "systemd",
+        "cron",
+        "task-scheduler"
+      ]
+    }
+  }
+}

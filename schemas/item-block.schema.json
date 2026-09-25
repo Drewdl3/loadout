@@ -1,0 +1,112 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/item-block.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LoadoutBlock",
+  "description": "The `loadout:` block in item frontmatter, also used for `LOADOUT.md`\n`defaults:`. Every field is optional; unset fields fall back to the\nsource defaults, then to built-in defaults.",
+  "type": "object",
+  "properties": {
+    "layer": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "group": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "applies_to": {
+      "description": "Axis → allowed groups. All listed axes must match (AND); values within\nan axis are alternatives (OR).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "product": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Mode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "locked": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "overridable": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "targets": {
+      "description": "Optional include-list of target ids.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "author": {
+      "description": "Who wrote the item, e.g. `Ada Lovelace` or `Ada Lovelace <ada@example.com>`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "co_authors": {
+      "description": "Other people who contributed to it. A single string is accepted\ntoo; `coAuthors` / `coAuthor` are accepted as spellings.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "Mode": {
+      "description": "How an item's enabled state is decided.",
+      "oneOf": [
+        {
+          "description": "Always enabled; user toggles are ignored.",
+          "type": "string",
+          "const": "required"
+        },
+        {
+          "description": "Enabled unless the user toggles it off.",
+          "type": "string",
+          "const": "default-on"
+        },
+        {
+          "description": "Disabled unless the user toggles it on.",
+          "type": "string",
+          "const": "default-off"
+        }
+      ]
+    }
+  }
+}

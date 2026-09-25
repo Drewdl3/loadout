@@ -1,0 +1,14 @@
+---
+source: crates/loadout-targets/src/mcp.rs
+expression: text
+---
+# my codex config
+model = "gpt-5"
+
+[mcp_servers.mine]
+command = "my-server" # keep this comment
+
+[mcp_servers.jira]
+url = "https://mcp.example.com/mcp"
+bearer_token_env_var = "TOKEN"
+http_headers = { X-Team = "payments" }

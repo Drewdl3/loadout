@@ -1,0 +1,48 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/doctor.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DoctorReport",
+  "description": "`--json` output of `lo doctor`.",
+  "type": "object",
+  "properties": {
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Check"
+      }
+    }
+  },
+  "required": [
+    "checks"
+  ],
+  "$defs": {
+    "Check": {
+      "type": "object",
+      "properties": {
+        "check": {
+          "description": "Stable check id, e.g. `git`, `config`, `broken-link`, `collision`.",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "check",
+        "status",
+        "message"
+      ]
+    },
+    "Status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "warn",
+        "error"
+      ]
+    }
+  }
+}

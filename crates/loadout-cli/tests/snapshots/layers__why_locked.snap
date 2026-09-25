@@ -1,0 +1,11 @@
+---
+source: crates/loadout-cli/tests/layers.rs
+expression: out.stdout
+---
+skill/security — enabled (required)
+winner: acme-company:skill/security (locked or not overridable at the most general layer)
+candidates:
+  ✓ acme-company:skill/security  company:acme (rank 0, priority 0) [locked] — winner
+  ✗ payments:skill/security      team:payments-dev (rank 20, priority 0) — blocked override: acme-company:skill/security is locked
+targets:
+  claude-code: ~/.claude/skills/security (link)

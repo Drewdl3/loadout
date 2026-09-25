@@ -1,0 +1,32 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/self-update.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SelfUpdateReport",
+  "description": "`--json` output of `lo self-update`.",
+  "type": "object",
+  "properties": {
+    "current": {
+      "type": "string"
+    },
+    "latest": {
+      "description": "The release looked at (without the leading `v`).",
+      "type": "string"
+    },
+    "update_available": {
+      "type": "boolean"
+    },
+    "updated": {
+      "type": "boolean"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "current",
+    "latest",
+    "update_available",
+    "updated",
+    "path"
+  ]
+}

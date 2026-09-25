@@ -1,0 +1,5 @@
+---
+source: crates/loadout-cli/tests/search.rs
+expression: human.stdout
+---
+on   payments-skills:skill/write-spec  team:payments-dev        Write a feature spec in the Payments format.

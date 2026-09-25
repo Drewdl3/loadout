@@ -1,0 +1,140 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/adopt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AdoptReport",
+  "description": "`--json` output of `lo adopt`.",
+  "type": "object",
+  "properties": {
+    "candidates": {
+      "description": "Skills found. Without `--into`/`--dir`, that's all this command does.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      }
+    },
+    "source": {
+      "description": "The destination source's name, when adopting.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "adopted": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Adopted"
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Skipped"
+      }
+    },
+    "working_clone": {
+      "description": "Written to the source's working clone (`--into`), ready for\n`lo export-source`.",
+      "type": "boolean"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "candidates",
+    "adopted",
+    "skipped",
+    "working_clone",
+    "warnings"
+  ],
+  "$defs": {
+    "Candidate": {
+      "description": "A skill found on disk that Loadout doesn't manage.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "The skill's folder.",
+          "type": "string"
+        },
+        "found_in": {
+          "description": "Where it was found: a target id (`claude-code`, …) or `path`.",
+          "type": "string"
+        },
+        "problem": {
+          "description": "Why it can't be adopted as is (e.g. a name that isn't kebab-case).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "found_in"
+      ]
+    },
+    "Adopted": {
+      "description": "One adopted skill.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "id": {
+          "description": "`<source>:skill/<name>`.",
+          "type": "string"
+        },
+        "from": {
+          "description": "Where it was copied from.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Its folder in the source.",
+          "type": "string"
+        },
+        "files": {
+          "description": "Files copied, relative to the skill folder.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "id",
+        "from",
+        "path",
+        "files"
+      ]
+    },
+    "Skipped": {
+      "description": "A skill that was selected but not adopted.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "reason"
+      ]
+    }
+  }
+}

@@ -1,0 +1,370 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/sync.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApplyReport",
+  "description": "What an apply did. `--json` output of `sync`, `enable`, `disable`,\n`prefer`.",
+  "type": "object",
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceReport"
+      }
+    },
+    "enabled_items": {
+      "description": "Number of enabled items (target-independent view).",
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TargetReport"
+      }
+    },
+    "conflicts": {
+      "description": "True when some `kind/name` had an unresolved equal-rank conflict.",
+      "type": "boolean"
+    },
+    "profile_refreshed": {
+      "description": "True when membership discovery ran and `[profile]` was updated.",
+      "type": "boolean"
+    },
+    "pending": {
+      "description": "Changes waiting for `lo approve` (after this run).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PendingChange"
+      }
+    },
+    "audit_blocked": {
+      "description": "True when a pending change is blocked by a critical audit finding.",
+      "type": "boolean"
+    },
+    "findings": {
+      "description": "Audit findings on changes that were applied.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FindingRecord"
+      }
+    },
+    "dry_run": {
+      "description": "`--dry-run`: nothing was changed; targets show what would change.",
+      "type": "boolean"
+    },
+    "up_to_date": {
+      "description": "`--if-stale`: the last sync is recent, nothing was done.",
+      "type": "boolean"
+    },
+    "signature_failures": {
+      "description": "Updates refused because their commits aren't signed by an allowed\nsigner; the previous pin is kept.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "project": {
+      "description": "`sync` inside a repo with a project layer: that layer's result.",
+      "anyOf": [
+        {
+          "$ref": "#"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "sources",
+    "enabled_items",
+    "targets",
+    "conflicts",
+    "profile_refreshed",
+    "pending",
+    "audit_blocked",
+    "findings",
+    "dry_run",
+    "up_to_date",
+    "signature_failures",
+    "warnings"
+  ],
+  "$defs": {
+    "SourceReport": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "updated_from": {
+          "description": "The previously applied commit, when this run moved the source.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "cached": {
+          "description": "True when the checkout was not fetched (cached mode or fetch failure).",
+          "type": "boolean"
+        },
+        "via": {
+          "description": "The source whose `upstream:` pulled this one in.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "url",
+        "commit",
+        "items",
+        "cached"
+      ]
+    },
+    "TargetReport": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "added": {
+          "description": "Item keys (`kind/name`) newly installed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updated": {
+          "description": "Item keys whose entry was replaced.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "removed": {
+          "description": "Item keys removed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unchanged": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "collisions": {
+          "description": "Paths skipped because something Loadout doesn't own is there.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathReport"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathReport"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "added",
+        "updated",
+        "removed",
+        "unchanged",
+        "collisions",
+        "errors"
+      ]
+    },
+    "PathReport": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "item",
+        "path",
+        "message"
+      ]
+    },
+    "PendingChange": {
+      "description": "A fetched change waiting for review.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Source id from its `LOADOUT.md`.",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "from": {
+          "description": "Applied commit; absent for a source that isn't installed yet.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "description": "Fetched commit waiting for approval.",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/Reason"
+        },
+        "items": {
+          "$ref": "#/$defs/ItemChanges"
+        },
+        "findings": {
+          "description": "Audit findings on the changed items.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FindingRecord"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "source",
+        "url",
+        "layer",
+        "to",
+        "reason",
+        "items"
+      ]
+    },
+    "Reason": {
+      "description": "Why a change was not applied.",
+      "oneOf": [
+        {
+          "description": "The source's layer is not in `auto_apply`.",
+          "type": "string",
+          "const": "review"
+        },
+        {
+          "description": "Manual subscriptions are never auto-applied.",
+          "type": "string",
+          "const": "manual-source"
+        },
+        {
+          "description": "The audit found `high` issues.",
+          "type": "string",
+          "const": "audit"
+        },
+        {
+          "description": "The audit found `critical` issues; approving needs `--force-audit`.",
+          "type": "string",
+          "const": "blocked"
+        }
+      ]
+    },
+    "ItemChanges": {
+      "description": "Item-level summary of a change (`kind/name` keys).",
+      "type": "object",
+      "properties": {
+        "added": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "changed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "added",
+        "removed",
+        "changed"
+      ]
+    },
+    "FindingRecord": {
+      "description": "A stored audit finding (same fields as `lo audit --json`).",
+      "type": "object",
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "message": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "excerpt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule",
+        "severity",
+        "message",
+        "item",
+        "file",
+        "line",
+        "excerpt"
+      ]
+    },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warn",
+        "high",
+        "critical"
+      ]
+    }
+  }
+}

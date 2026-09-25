@@ -1,0 +1,11 @@
+---
+source: crates/loadout-cli/tests/layers.rs
+expression: out.stdout
+---
+skill/x — enabled (default)
+winner: payments:skill/x (most specific layer)
+candidates:
+  ✓ payments:skill/x      team:payments-dev (rank 20, priority 0) — winner
+  ✗ acme-company:skill/x  company:acme (rank 0, priority 0) — outranked by payments:skill/x
+targets:
+  claude-code: ~/.claude/skills/x from acme-company:skill/x (link)

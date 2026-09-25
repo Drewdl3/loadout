@@ -1,0 +1,44 @@
+---
+source: crates/loadout-cli/tests/layers.rs
+expression: json
+---
+{
+  "key": "skill/write-spec",
+  "winner": "payments:skill/write-spec",
+  "rule": "highest_rank",
+  "enabled": true,
+  "enabled_by": "default",
+  "candidates": [
+    {
+      "id": "payments:skill/write-spec",
+      "layer": "team",
+      "group": "payments-dev",
+      "rank": 20,
+      "priority": 0,
+      "locked": false,
+      "overridable": true,
+      "outcome": "winner"
+    },
+    {
+      "id": "acme-company:skill/write-spec",
+      "layer": "company",
+      "group": "acme",
+      "rank": 0,
+      "priority": 0,
+      "locked": false,
+      "overridable": true,
+      "outcome": "outranked",
+      "by": "payments:skill/write-spec"
+    }
+  ],
+  "targets": [
+    {
+      "target": "claude-code",
+      "id": "payments:skill/write-spec",
+      "path": "~/.claude/skills/write-spec",
+      "mode": "symlink",
+      "installed": true
+    }
+  ],
+  "warnings": []
+}

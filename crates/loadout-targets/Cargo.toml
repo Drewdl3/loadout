@@ -1,0 +1,32 @@
+[package]
+name = "loadout-targets"
+description = "Loadout target table, linking and config renderers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+# Crash points for crash-safety tests; never enabled in release builds.
+test-support = []
+
+[dependencies]
+loadout-core.workspace = true
+loadout-model.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+junction.workspace = true
+
+[lints]
+workspace = true

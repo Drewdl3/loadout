@@ -1,0 +1,26 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/export.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExportReport",
+  "description": "`--json` output of `lo export`.",
+  "type": "object",
+  "properties": {
+    "code": {
+      "description": "The shortcode (`lo1_…`).",
+      "type": "string"
+    },
+    "fingerprint": {
+      "description": "Fingerprint of the configuration it describes.",
+      "type": "string"
+    },
+    "pinned": {
+      "description": "False with `--latest`.",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "code",
+    "fingerprint",
+    "pinned"
+  ]
+}

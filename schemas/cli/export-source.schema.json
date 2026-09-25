@@ -1,0 +1,72 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/export-source.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExportSourceReport",
+  "description": "`--json` output of `lo export-source`.",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string"
+    },
+    "path": {
+      "description": "The working clone.",
+      "type": "string"
+    },
+    "branch": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pushed": {
+      "type": "boolean"
+    },
+    "pull_request": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PullRequest"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "source",
+    "path",
+    "pushed",
+    "warnings"
+  ],
+  "$defs": {
+    "PullRequest": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "url",
+        "number"
+      ]
+    }
+  }
+}

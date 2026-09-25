@@ -1,0 +1,29 @@
+# Claude Code.
+id = "claude-code"
+display = "Claude Code"
+detect = ["~/.claude"]
+
+[skills]
+path = "~/.claude/skills"
+project = ".claude/skills"
+layout = "dir-per-item"
+
+[agents]
+path = "~/.claude/agents"
+project = ".claude/agents"
+layout = "file-per-item"
+
+[extras.commands]
+path = "~/.claude/commands"
+project = ".claude/commands"
+transform = "none"
+
+[mcp]
+renderer = "claude-code-json"
+path = "~/.claude.json"
+project = ".mcp.json"
+key = "mcpServers"
+
+[plugins]
+renderer = "claude-code-marketplace"
+path = "~/.claude/settings.json"

@@ -1,0 +1,16 @@
+---
+source: crates/loadout-targets/src/mcp.rs
+expression: "out.join(\"\\n\")"
+---
+ClaudeCodeJson stdio: {"type":"stdio","command":"/opt/lo","args":["mcp-run","acme:mcp/jira"]}
+ClaudeCodeJson remote: {"type":"http","url":"https://mcp.example.com/mcp","headers":{"Authorization":"Bearer ${TOKEN}","X-Team":"payments"}}
+CursorJson stdio: {"type":"stdio","command":"/opt/lo","args":["mcp-run","acme:mcp/jira"]}
+CursorJson remote: {"url":"https://mcp.example.com/mcp","headers":{"Authorization":"Bearer ${env:TOKEN}","X-Team":"payments"}}
+PiMcpJson stdio: {"command":"/opt/lo","args":["mcp-run","acme:mcp/jira"]}
+PiMcpJson remote: {"url":"https://mcp.example.com/mcp","headers":{"Authorization":"Bearer ${TOKEN}","X-Team":"payments"}}
+OpencodeJson stdio: {"type":"local","command":["/opt/lo","mcp-run","acme:mcp/jira"],"enabled":true}
+OpencodeJson remote: {"type":"remote","url":"https://mcp.example.com/mcp","headers":{"Authorization":"Bearer {env:TOKEN}","X-Team":"payments"},"enabled":true}
+CodexToml stdio: {"command":"/opt/lo","args":["mcp-run","acme:mcp/jira"]}
+CodexToml remote: {"url":"https://mcp.example.com/mcp","bearer_token_env_var":"TOKEN","http_headers":{"X-Team":"payments"}}
+BobJson stdio: {"command":"/opt/lo","args":["mcp-run","acme:mcp/jira"]}
+BobJson remote: {"httpURL":"https://mcp.example.com/mcp","headers":{"Authorization":"Bearer ${TOKEN}","X-Team":"payments"}}

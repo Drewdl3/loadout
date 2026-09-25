@@ -1,0 +1,20 @@
+# Cursor.
+id = "cursor"
+display = "Cursor"
+detect = ["~/.cursor"]
+
+[skills]
+path = "~/.cursor/skills"
+project = ".cursor/skills"
+layout = "dir-per-item"
+
+[agents]
+path = "~/.cursor/agents"
+project = ".cursor/agents"
+layout = "file-per-item"
+
+[mcp]
+renderer = "cursor-json"
+path = "~/.cursor/mcp.json"
+project = ".cursor/mcp.json"
+key = "mcpServers"

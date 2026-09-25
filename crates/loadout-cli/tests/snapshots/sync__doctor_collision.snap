@@ -1,0 +1,8 @@
+---
+source: crates/loadout-cli/tests/sync.rs
+expression: filtered
+---
+ok     config       [ROOT]/config/config.toml (1 manual source)
+ok     targets      claude-code
+warn   collision    claude-code: ~/.claude/skills/write-spec is not managed by Loadout, so team-skills:skill/write-spec is not installed
+1 problem(s) found.

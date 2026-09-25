@@ -1,0 +1,75 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/lock.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lock",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "source": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LockedSource"
+      }
+    },
+    "item": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LockedItem"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "$defs": {
+    "LockedSource": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "name": {
+          "description": "Source id from its `LOADOUT.md`.",
+          "type": "string"
+        },
+        "commit": {
+          "description": "Full commit SHA that is applied.",
+          "type": "string"
+        },
+        "fetched_at": {
+          "description": "When this commit was fetched (RFC 3339, UTC).",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "commit",
+        "fetched_at"
+      ]
+    },
+    "LockedItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "`source:kind/name`.",
+          "type": "string"
+        },
+        "content_hash": {
+          "description": "`blake3:<hex>` over the item's files.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "content_hash"
+      ]
+    }
+  }
+}

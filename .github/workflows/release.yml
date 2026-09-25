@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Build and smoke-test every target without publishing.
+  workflow_dispatch:
+  pull_request:
+    paths: [".github/workflows/release.yml"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # amd64 only for now; arm64 targets can be re-added later.
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, tool: zigbuild }
+          - { target: x86_64-apple-darwin, os: macos-15-intel, tool: cargo }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, tool: cargo }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install && rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install zig + cargo-zigbuild
+        if: matrix.tool == 'zigbuild'
+        uses: mlugg/setup-zig@v2
+      - if: matrix.tool == 'zigbuild'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build (zigbuild)
+        if: matrix.tool == 'zigbuild'
+        run: cargo zigbuild --release --locked -p loadout-cli --target ${{ matrix.target }}
+
+      - name: Build (cargo)
+        if: matrix.tool == 'cargo'
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ contains(matrix.target, 'windows') && '-C target-feature=+crt-static' || '' }}
+        run: cargo build --release --locked -p loadout-cli --target ${{ matrix.target }}
+
+      - name: Package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$GITHUB_REF_TYPE" == "tag" ]] || version="$(git rev-parse --short HEAD)"
+          name="lo-${version}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp README.md LICENSE THIRD_PARTY_NOTICES.md "dist/$name/"
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            cp "target/${{ matrix.target }}/release/lo.exe" "dist/$name/"
+            (cd dist && 7z a "$name.zip" "$name" >/dev/null)
+            archive="dist/$name.zip"
+          else
+            cp "target/${{ matrix.target }}/release/lo" "dist/$name/"
+            tar -C dist -czf "dist/$name.tar.gz" "$name"
+            archive="dist/$name.tar.gz"
+          fi
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+  smoke:
+    name: smoke (${{ matrix.target }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: x86_64-apple-darwin, os: macos-15-intel }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+      - name: Run lo --version
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for a in *.tar.gz; do tar -xzf "$a"; done
+          for a in *.zip; do 7z x "$a" >/dev/null; done
+          bin="$(find . -type f \( -name lo -o -name lo.exe \) | head -n1)"
+          "$bin" --version
+          "$bin" --version | grep -E '^lo [0-9]+\.[0-9]+\.[0-9]+'
+      - name: Check Linux binary is static
+        if: runner.os == 'Linux'
+        run: |
+          bin="$(find . -type f -name lo | head -n1)"
+          file "$bin"
+          file "$bin" | grep -Eq 'statically linked|static-pie linked'
+
+  release:
+    name: publish release
+    needs: smoke
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

@@ -1,0 +1,40 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/new-source.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NewSourceReport",
+  "description": "`--json` output of `lo new-source`.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "dir": {
+      "type": "string"
+    },
+    "layer": {
+      "type": "string"
+    },
+    "group": {
+      "type": "string"
+    },
+    "company_config": {
+      "description": "True for a company config.",
+      "type": "boolean"
+    },
+    "created": {
+      "description": "Files written, relative to `dir`.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "dir",
+    "layer",
+    "group",
+    "company_config",
+    "created"
+  ]
+}

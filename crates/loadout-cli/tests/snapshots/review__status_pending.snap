@@ -1,0 +1,9 @@
+---
+source: crates/loadout-cli/tests/review.rs
+expression: status.stdout
+---
+Last sync:  [TIME]
+Installed:  2 enabled item(s) from 2 source(s)
+Pending:    1 change(s)
+  payments-skills        [SHORT-SHA] → [SHORT-SHA]  (needs review)
+Fingerprint: lo-fp:[FP]

@@ -1,0 +1,17 @@
+---
+source: crates/loadout-targets/src/mcp.rs
+expression: text
+---
+{
+  "numStartups": 42,
+  "mcpServers": {
+    "mine": {
+      "type": "stdio",
+      "command": "my-server"
+    },
+    "jira": {
+      "command": "x"
+    }
+  },
+  "projects": {}
+}

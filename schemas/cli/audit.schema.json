@@ -1,0 +1,108 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/audit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AuditReport",
+  "description": "`--json` output of `lo audit`.",
+  "type": "object",
+  "properties": {
+    "sources": {
+      "description": "Sources audited.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "items": {
+      "description": "Number of items audited.",
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    },
+    "worst": {
+      "description": "The worst severity found, if any.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Severity"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "sources",
+    "items",
+    "findings",
+    "warnings"
+  ],
+  "$defs": {
+    "Finding": {
+      "description": "One finding in one file of one item.",
+      "type": "object",
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "category": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "item": {
+          "description": "`source:kind/name`.",
+          "type": "string"
+        },
+        "file": {
+          "description": "File inside the item.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line number.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "excerpt": {
+          "description": "The offending line, shortened; secret matches are redacted.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule",
+        "severity",
+        "category",
+        "message",
+        "item",
+        "file",
+        "line",
+        "excerpt"
+      ]
+    },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warn",
+        "high",
+        "critical"
+      ]
+    }
+  }
+}

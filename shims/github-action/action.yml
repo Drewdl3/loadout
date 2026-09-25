@@ -1,0 +1,70 @@
+name: Set up Loadout
+description: Install the lo CLI and install agent configuration exactly as loadout.lock pins it (CI).
+branding:
+  icon: package
+  color: blue
+inputs:
+  version:
+    description: Release tag to install (e.g. v0.1.0). Default is the latest release.
+    default: ""
+  binary:
+    description: Use this lo binary instead of downloading a release.
+    default: ""
+  args:
+    description: Arguments for the lo run after installing; empty to only install.
+    default: sync --locked --non-interactive
+  role:
+    description: Value for LOADOUT_ROLE (company configs can map the `ci` role to CI presets).
+    default: ci
+  token:
+    description: Token used to download the release.
+    default: ${{ github.token }}
+outputs:
+  path:
+    description: Path of the lo binary.
+    value: ${{ steps.install.outputs.path }}
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        VERSION: ${{ inputs.version }}
+        BINARY: ${{ inputs.binary }}
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/loadout/bin"
+        mkdir -p "$dir"
+        if [ -n "$BINARY" ]; then
+          src="$BINARY"
+        else
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64) target=x86_64-unknown-linux-musl ;;
+            macOS-X64) target=x86_64-apple-darwin ;;
+            Windows-X64) target=x86_64-pc-windows-msvc ;;
+            *) echo "::error::no lo release for $RUNNER_OS-$RUNNER_ARCH yet"; exit 1 ;;
+          esac
+          dl="$RUNNER_TEMP/loadout/dl"
+          mkdir -p "$dl"
+          gh release download ${VERSION:+"$VERSION"} --repo Drewdl3/loadout \
+            --pattern "lo-*-$target.*" --dir "$dl" --clobber
+          for a in "$dl"/*.tar.gz; do [ -e "$a" ] && tar -xzf "$a" -C "$dl"; done
+          for a in "$dl"/*.zip; do [ -e "$a" ] && (cd "$dl" && 7z x -y "$a" >/dev/null); done
+          src="$(find "$dl" -type f \( -name lo -o -name lo.exe \) | head -n1)"
+        fi
+        exe="lo"; [ "$RUNNER_OS" = "Windows" ] && exe="lo.exe"
+        cp "$src" "$dir/$exe"
+        chmod +x "$dir/$exe"
+        echo "$dir" >> "$GITHUB_PATH"
+        echo "path=$dir/$exe" >> "$GITHUB_OUTPUT"
+        "$dir/$exe" --version
+    - if: inputs.args != ''
+      shell: bash
+      env:
+        LOADOUT_ROLE: ${{ inputs.role }}
+        ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        # shellcheck disable=SC2086
+        "${{ steps.install.outputs.path }}" $ARGS

@@ -1,0 +1,31 @@
+---
+source: crates/loadout-cli/tests/commands.rs
+expression: json
+---
+{
+  "synced": true,
+  "items": [
+    {
+      "id": "team-skills:skill/opt-in",
+      "kind": "skill",
+      "name": "opt-in",
+      "source": "team-skills",
+      "description": "Optional helper.",
+      "layer": "team",
+      "group": "payments-dev",
+      "enabled": false,
+      "content_hash": "blake3:[HASH]"
+    },
+    {
+      "id": "team-skills:skill/write-spec",
+      "kind": "skill",
+      "name": "write-spec",
+      "source": "team-skills",
+      "description": "Write a spec.",
+      "layer": "team",
+      "group": "payments-dev",
+      "enabled": true,
+      "content_hash": "blake3:[HASH]"
+    }
+  ]
+}

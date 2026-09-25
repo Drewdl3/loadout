@@ -1,0 +1,58 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/template-use.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TemplateUseReport",
+  "description": "`--json` output of `lo template use`.",
+  "type": "object",
+  "properties": {
+    "template": {
+      "type": "string"
+    },
+    "id": {
+      "description": "`source:skill/name` of the new skill.",
+      "type": "string"
+    },
+    "source": {
+      "description": "The source it was written to.",
+      "type": "string"
+    },
+    "path": {
+      "description": "Directory of the new skill.",
+      "type": "string"
+    },
+    "files": {
+      "description": "Files written, relative to the skill directory.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "values": {
+      "description": "The values used.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "working_clone": {
+      "description": "Written to the source's working clone (`--into`), ready for\n`lo export-source`.",
+      "type": "boolean"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "template",
+    "id",
+    "source",
+    "path",
+    "files",
+    "values",
+    "working_clone",
+    "warnings"
+  ]
+}

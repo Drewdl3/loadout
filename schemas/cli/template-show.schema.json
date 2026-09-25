@@ -1,0 +1,99 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/template-show.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TemplateShowReport",
+  "description": "`--json` output of `lo template show`.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "`source:template/name`.",
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "description": "What the template is for.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "skill_description": {
+      "description": "The description the generated skill gets (may use variables).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TemplateVar"
+      }
+    },
+    "files": {
+      "description": "Files, relative to the template directory.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "not_subscribed": {
+      "description": "From a source you're not subscribed to (`--all-sources`).",
+      "type": "boolean"
+    },
+    "text": {
+      "description": "The template's `SKILL.md`.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "source",
+    "name",
+    "tags",
+    "variables",
+    "files",
+    "not_subscribed",
+    "text"
+  ],
+  "$defs": {
+    "TemplateVar": {
+      "description": "One variable.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Used as `{{name}}` in the template's files.",
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default": {
+          "description": "Used when no value is given; a variable without one is required.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ListReport",
+  "description": "`--json` output of `lo list`. With `--target`, items are that\ntarget's winners, which can differ from the overall list when items\nrestrict their `targets`.",
+  "type": "object",
+  "properties": {
+    "synced": {
+      "description": "True once `lo sync` has run at least once.",
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ResolvedItem"
+      }
+    }
+  },
+  "required": [
+    "synced",
+    "items"
+  ],
+  "$defs": {
+    "ResolvedItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "`source:kind/name`.",
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "content_hash": {
+          "description": "`blake3:<hex>` over the item's files.",
+          "type": "string"
+        },
+        "targets": {
+          "description": "Optional include-list of target ids from the item's `loadout:` block.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "co_authors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "source",
+        "layer",
+        "enabled",
+        "content_hash"
+      ]
+    }
+  }
+}

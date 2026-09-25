@@ -1,0 +1,32 @@
+[package]
+name = "loadout-members"
+description = "Loadout membership discovery providers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+# Loopback HTTP mock for tests in this and other crates.
+test-support = []
+
+[dependencies]
+loadout-git.workspace = true
+loadout-model.workspace = true
+schemars.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+loadout-git = { workspace = true, features = ["test-support"] }
+loadout-members = { path = ".", features = ["test-support"] }
+serde-saphyr.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

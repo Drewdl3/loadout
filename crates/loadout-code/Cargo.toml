@@ -1,0 +1,23 @@
+[package]
+name = "loadout-code"
+description = "Loadout shortcode encode/decode and configuration fingerprint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+blake3.workspace = true
+ciborium.workspace = true
+data-encoding.workspace = true
+ruzstd.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,192 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/subscribe-preview.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SubscribePreview",
+  "description": "`--json` output of `lo subscribe --dry-run`.",
+  "type": "object",
+  "properties": {
+    "sources": {
+      "description": "The source first, then its upstreams (transitively).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PreviewSource"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "sources",
+    "warnings"
+  ],
+  "$defs": {
+    "PreviewSource": {
+      "description": "One source in a preview.",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "type": "string"
+        },
+        "via": {
+          "description": "The source whose `upstream:` brings this one in.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Doc"
+          }
+        },
+        "templates": {
+          "description": "Template ids (`source:template/name`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "url",
+        "name",
+        "layer",
+        "commit",
+        "items",
+        "templates"
+      ]
+    },
+    "Doc": {
+      "description": "One searchable item.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "`source:kind/name`.",
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "product": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "roles": {
+          "description": "Roles from `applies_to.role`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "co_authors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/State"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "source",
+        "layer",
+        "state"
+      ]
+    },
+    "State": {
+      "description": "Where an item stands for this user.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled"
+          ]
+        },
+        {
+          "description": "Another source's item with the same name wins.",
+          "type": "string",
+          "const": "shadowed"
+        },
+        {
+          "description": "Not for this profile (group, `applies_to`, targets).",
+          "type": "string",
+          "const": "not-for-you"
+        },
+        {
+          "description": "From a company config source you're not subscribed to (`--all-sources`).",
+          "type": "string",
+          "const": "not-subscribed"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lo sync --if-stale --quiet --non-interactive --exit-zero",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

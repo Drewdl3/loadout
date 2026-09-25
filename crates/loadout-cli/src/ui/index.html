@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loadout</title>
+<style>
+  :root {
+    --bg:#f7f6f3; --panel:#ffffff; --sunken:#f0eee9; --fg:#1c1b19; --muted:#6a665f; --faint:#9a958c;
+    --line:#e3e0d9; --line-strong:#d2cec5; --accent:#2f5d8a; --accent-soft:#e6eef6; --accent-fg:#ffffff;
+    --ok:#2c7a4b; --ok-soft:#e3f1e8; --warn:#9a5d12; --warn-soft:#f8eddc; --bad:#a3372b; --bad-soft:#f7e3e0;
+    --shadow:0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+    --radius:10px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#141518; --panel:#1b1d21; --sunken:#17191c; --fg:#e9e7e2; --muted:#a09b92; --faint:#6f6b64;
+      --line:#2a2d32; --line-strong:#383c42; --accent:#86b4e3; --accent-soft:#1f2c3a; --accent-fg:#0f1720;
+      --ok:#74c795; --ok-soft:#1b2c22; --warn:#e3a95f; --warn-soft:#2f2517; --bad:#ec8173; --bad-soft:#321c1a;
+      --shadow:0 1px 2px rgba(0,0,0,.3);
+    }
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--fg); }
+  body { font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  code, .mono { font-family:var(--mono); font-size:12.5px; }
+  a { color:var(--accent); }
+  .app { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
+  aside { border-right:1px solid var(--line); padding:18px 12px; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:4px; background:var(--sunken); }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:650; font-size:15px; padding:2px 8px 14px; }
+  .brand .logo { width:24px; height:24px; border-radius:7px; background:var(--accent); color:var(--accent-fg); display:grid; place-items:center; font-size:13px; font-weight:700; }
+  nav button { display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left; background:none; border:0; padding:7px 10px; border-radius:7px; color:var(--muted); cursor:pointer; font:inherit; }
+  nav button:hover { background:var(--panel); color:var(--fg); }
+  nav button.on { background:var(--panel); color:var(--fg); box-shadow:inset 0 0 0 1px var(--line); font-weight:550; }
+  nav .count { font-size:11px; background:var(--warn-soft); color:var(--warn); border-radius:9px; padding:0 7px; }
+  .side-foot { margin-top:auto; padding:8px; font-size:12px; color:var(--faint); }
+  main { padding:24px 28px 80px; max-width:1180px; width:100%; }
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
+  h1 { font-size:21px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  h2 { font-size:15px; margin:0 0 10px; font-weight:620; }
+  .sub { color:var(--muted); margin-top:3px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; box-shadow:var(--shadow); }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:14px; }
+  .tile { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow); }
+  .tile .n { font-size:26px; font-weight:650; letter-spacing:-.02em; }
+  .tile .l { color:var(--muted); font-size:12.5px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:last-child td { border-bottom:0; }
+  th { color:var(--muted); font-weight:550; font-size:12px; }
+  .muted { color:var(--muted); } .faint { color:var(--faint); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  .btn { font:inherit; font-size:13px; padding:5px 11px; border-radius:7px; border:1px solid var(--line-strong); background:var(--panel); color:var(--fg); cursor:pointer; white-space:nowrap; }
+  .btn:hover { border-color:var(--faint); }
+  .btn.primary { background:var(--accent); color:var(--accent-fg); border-color:var(--accent); }
+  .btn.ghost { border-color:transparent; background:none; color:var(--muted); }
+  .btn.ghost:hover { color:var(--fg); background:var(--sunken); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  input[type=text], input[type=search], select, textarea { font:inherit; padding:6px 9px; border:1px solid var(--line-strong); border-radius:7px; background:var(--panel); color:var(--fg); min-width:0; }
+  input:focus, select:focus, textarea:focus, .btn:focus-visible, nav button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  textarea { width:100%; min-height:320px; font-family:var(--mono); font-size:12.5px; }
+  pre { white-space:pre-wrap; overflow-x:auto; background:var(--sunken); border:1px solid var(--line); border-radius:8px; padding:10px; font-family:var(--mono); font-size:12px; margin:8px 0 0; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row + .row { margin-top:8px; }
+  .grow { flex:1; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11.5px; font-weight:550; border:1px solid transparent; white-space:nowrap; }
+  .pill.enabled { background:var(--ok-soft); color:var(--ok); }
+  .pill.disabled { background:var(--sunken); color:var(--muted); border-color:var(--line); }
+  .pill.shadowed { background:var(--warn-soft); color:var(--warn); }
+  .pill.not-for-you, .pill.not-subscribed { background:var(--accent-soft); color:var(--accent); }
+  .chip { display:inline-block; padding:0 7px; border-radius:6px; font-size:11.5px; background:var(--sunken); color:var(--muted); border:1px solid var(--line); margin:2px 4px 0 0; }
+  .row.nowrap { flex-wrap:nowrap; }
+  label.check { display:flex; gap:8px; align-items:flex-start; margin-top:6px; }
+  label.check input { margin-top:3px; flex:none; }
+  .row.nowrap input { flex:1; min-width:0; }
+  .byline { color:var(--muted); font-size:12px; margin-top:2px; }
+  .byline b { font-weight:560; color:var(--fg); }
+  .authoring { display:flex; gap:2px; margin:4px 0 0 -8px; flex-wrap:wrap; }
+  .authoring .btn { font-size:12px; padding:2px 8px; }
+  .copy-group h3 { margin-bottom:6px; }
+  .copy-opt { display:flex; gap:8px; align-items:center; padding:6px 8px; border:1px solid var(--line); border-radius:7px; margin-bottom:6px; cursor:pointer; flex-wrap:wrap; }
+  .copy-opt:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); }
+  .copy-opt .n { font-weight:560; }
+  .chip.role { background:var(--accent-soft); color:var(--accent); border-color:transparent; }
+  .kind { font-family:var(--mono); font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.04em; }
+  /* Catalog */
+  .catalog { display:grid; grid-template-columns:230px 1fr; gap:18px; align-items:start; }
+  .filters { position:sticky; top:16px; }
+  .filters > summary { font-weight:650; cursor:pointer; list-style:none; margin-bottom:10px; }
+  .filters > summary::-webkit-details-marker { display:none; }
+  .filters:not([open]) > summary { margin-bottom:0; }
+  .filters:not([open]) > summary::after { content:" ▸"; color:var(--faint); }
+  .facet { margin-bottom:14px; }
+  .facet h3 { font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); margin:0 0 6px; font-weight:600; }
+  .facet label { display:flex; align-items:center; gap:7px; padding:2px 4px; border-radius:5px; cursor:pointer; font-size:13px; }
+  .facet label:hover { background:var(--sunken); }
+  .facet label .c { margin-left:auto; color:var(--faint); font-size:11.5px; }
+  .facet .more { font-size:12px; color:var(--accent); background:none; border:0; cursor:pointer; padding:2px 4px; }
+  .items { display:flex; flex-direction:column; gap:8px; }
+  .item { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; display:grid; grid-template-columns:1fr auto; gap:10px; }
+  .item .title { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .item .name { font-weight:600; }
+  .item .src { color:var(--muted); font-size:12.5px; }
+  .item .desc { margin-top:3px; }
+  .item .acts { display:flex; gap:6px; align-items:flex-start; }
+  .searchbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .searchbar input[type=search] { flex:1; min-width:200px; padding:8px 11px; }
+  .empty { text-align:center; padding:36px 10px; color:var(--muted); }
+  /* Sources tree */
+  .tree { list-style:none; margin:0; padding:0; }
+  .tree .tree { margin-left:22px; border-left:1px dashed var(--line-strong); padding-left:12px; }
+  .node { display:flex; gap:10px; align-items:center; padding:8px 0; flex-wrap:wrap; }
+  .node .n { font-weight:600; }
+  .badge { font-size:11px; padding:0 7px; border-radius:6px; border:1px solid var(--line); color:var(--muted); }
+  .badge.upstream { border-color:transparent; background:var(--accent-soft); color:var(--accent); }
+  details.src-preview { border-top:1px solid var(--line); padding:8px 0; }
+  details.src-preview summary { cursor:pointer; list-style:none; display:flex; gap:8px; align-items:center; }
+  details.src-preview summary::before { content:"▸"; color:var(--faint); width:10px; }
+  details.src-preview[open] summary::before { content:"▾"; }
+  .drawer { position:fixed; right:0; top:0; bottom:0; width:min(560px,100%); background:var(--panel); border-left:1px solid var(--line); padding:20px; overflow:auto; transform:translateX(100%); visibility:hidden; transition:transform .18s ease, visibility .18s; z-index:20; }
+  .drawer.wide { width:min(780px,100%); }
+  .drawer h3 { font-size:13.5px; margin:18px 0 8px; font-weight:620; }
+  .var-row { margin-bottom:6px; }
+  .drawer.open { transform:none; visibility:visible; box-shadow:-8px 0 24px rgba(0,0,0,.12); }
+  .form-grid { display:grid; grid-template-columns:160px 1fr; gap:8px 12px; align-items:center; }
+  .form-grid .hint { grid-column:2; color:var(--faint); font-size:12px; margin-top:-4px; }
+  .nav-group { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); padding:12px 10px 3px; font-weight:600; }
+  .help-btn { margin-top:12px; text-align:left; font-size:12.5px; white-space:normal; }
+  details.explain { background:var(--accent-soft); border-radius:var(--radius); padding:10px 14px; margin:-6px 0 14px; }
+  details.explain summary { cursor:pointer; color:var(--accent); font-weight:600; font-size:13px; }
+  details.explain p { margin:6px 0 0; max-width:78ch; }
+  dl.glossary dt { font-weight:620; margin-top:12px; }
+  dl.glossary dd { margin:2px 0 0; color:var(--muted); }
+  .steps3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .step3 { background:var(--sunken); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; position:relative; }
+  .step3 .num { width:24px; height:24px; border-radius:50%; background:var(--accent); color:var(--accent-fg); display:inline-grid; place-items:center; font-weight:700; font-size:12.5px; margin-bottom:6px; }
+  .step3 b { display:block; }
+  .step3:not(:last-child)::after { content:"→"; position:absolute; right:-11px; top:50%; transform:translateY(-50%); color:var(--faint); }
+  .steps3.plain .step3::after { content:none; }
+  .steps3.plain .step3 { display:flex; flex-direction:column; align-items:flex-start; }
+  .steps3.plain .step3 .btn { margin-top:auto; }
+  ol.flow { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:0; padding:0; list-style:none; counter-reset:f; }
+  ol.flow li { counter-increment:f; background:var(--sunken); border-radius:8px; padding:10px 12px; color:var(--muted); }
+  ol.flow li::before { content:counter(f); display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:11.5px; margin-right:6px; }
+  ol.flow li b { color:var(--fg); }
+  .checklist { list-style:none; margin:0; padding:0; }
+  .checklist li { display:grid; grid-template-columns:30px 1fr auto; gap:12px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
+  .checklist li:first-child { border-top:0; }
+  .checklist .tick { width:26px; height:26px; border-radius:50%; border:2px solid var(--line-strong); display:grid; place-items:center; font-weight:700; color:var(--faint); font-size:13px; }
+  .checklist li.done .tick { background:var(--ok); border-color:var(--ok); color:var(--panel); }
+  .checklist li.next { background:var(--accent-soft); margin:0 -18px; padding:12px 18px; border-radius:8px; border-top-color:transparent; }
+  .checklist li.next .tick { border-color:var(--accent); color:var(--accent); }
+  .checklist li.done .t { color:var(--muted); }
+  .checklist .t { font-weight:600; }
+  .progress { height:6px; background:var(--sunken); border-radius:3px; overflow:hidden; margin:6px 0 4px; }
+  .progress > div { height:100%; background:var(--ok); }
+  .lede { font-size:15px; max-width:70ch; margin:0 0 4px; }
+  /* Layers */
+  .layers { list-style:none; margin:0; padding:0; position:relative; }
+  .layer { position:relative; padding-left:34px; margin-bottom:14px; }
+  .layer::before { content:""; position:absolute; left:11px; top:28px; bottom:-14px; border-left:2px solid var(--line-strong); }
+  .layer:last-child::before { display:none; }
+  .layer .dot { position:absolute; left:0; top:14px; width:24px; height:24px; border-radius:50%; background:var(--accent-soft); color:var(--accent); display:grid; place-items:center; font-size:11px; font-weight:700; border:2px solid var(--panel); }
+  .layer.empty-layer .dot { background:var(--sunken); color:var(--faint); }
+  .layer .card { margin-bottom:0; }
+  .layer-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .layer-head h2 { margin:0; text-transform:capitalize; }
+  .group { border-top:1px solid var(--line); padding:10px 0 4px; margin-top:10px; }
+  .group-head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  .group-head .n { font-weight:600; }
+  .litem { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:start; padding:6px 0 6px 12px; border-left:2px solid var(--line); margin-left:4px; }
+  .litem + .litem { margin-top:2px; }
+  .litem.win { border-left-color:var(--ok); }
+  .litem.lose { opacity:.8; }
+  .litem .note { font-size:12.5px; color:var(--muted); }
+  .litem > .pill { justify-self:start; }
+  .chain { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chain .chip { font-size:13px; padding:2px 10px; margin:0; }
+  .litem .acts { display:flex; gap:6px; flex-wrap:nowrap; }
+  .layer-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-bottom:12px; }
+  #toast { position:fixed; bottom:18px; right:18px; max-width:520px; padding:11px 15px; border-radius:9px; background:var(--panel); border:1px solid var(--line); box-shadow:var(--shadow); display:none; white-space:pre-wrap; z-index:30; }
+  #toast.bad { border-color:var(--bad); color:var(--bad); }
+  @media (max-width: 860px) {
+    .app { grid-template-columns:1fr; }
+    aside { position:static; height:auto; flex-direction:row; flex-wrap:wrap; padding:10px 12px; border-right:0; border-bottom:1px solid var(--line); }
+    .brand { padding:4px 8px; width:100%; }
+    nav { display:flex; flex-wrap:wrap; gap:2px; }
+    nav button { width:auto; }
+    .side-foot { display:none; }
+    main { padding:16px; }
+    .catalog { grid-template-columns:1fr; }
+    .filters { position:static; }
+    .item { grid-template-columns:1fr; }
+    .form-grid { grid-template-columns:1fr; }
+    .form-grid .hint { grid-column:1; }
+    .nav-group { display:none; }
+    .help-btn { margin-top:0; }
+    .steps3, ol.flow { grid-template-columns:1fr; }
+    .step3:not(:last-child)::after { content:"↓"; right:auto; left:50%; top:auto; bottom:-15px; transform:none; }
+    .checklist li { grid-template-columns:30px 1fr; }
+    .litem { grid-template-columns:1fr; }
+    .checklist li > :last-child { grid-column:2; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><span class="logo">L</span>Loadout</div>
+    <nav id="nav"></nav>
+    <button class="btn ghost help-btn" onclick="glossary()">? What do these words mean</button>
+    <div class="side-foot"><div id="last-sync"></div><div id="fp" class="mono" title="Your setup's fingerprint: two people with the same one have the same setup"></div></div>
+  </aside>
+  <main id="main"></main>
+</div>
+<div id="drawer" class="drawer" role="dialog" aria-modal="false"></div>
+<div id="toast" role="status"></div>
+<script>
+"use strict";
+const token = new URLSearchParams(location.search).get("token") || "";
+// [id (URL hash), label, group, hint]. Ids stay stable for links.
+const tabs = [
+  ["Start", "Start here", "", "A guided tour and your setup checklist"],
+  ["Overview", "Home", "Use", "Your setup at a glance"],
+  ["Catalog", "Browse skills", "Use", "Everything you can get, with filters"],
+  ["Layers", "Your layers", "Use", "Which group each skill comes from, and which version wins"],
+  ["Targets", "AI tools", "Use", "The AI tools Loadout installs into"],
+  ["Review", "Updates", "Use", "Changes waiting for your OK"],
+  ["Sources", "Sources", "Share", "Where skills come from"],
+  ["Templates", "Templates", "Share", "Fill-in-the-blanks skills"],
+  ["Edit", "Create & edit", "Share", "Write skills and propose changes"],
+  ["Doctor", "Health check", "Fix", "Problems with this computer's setup"],
+];
+let current = "Overview";
+let pendingCount = 0;
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) e[k] = v;
+    else if (k === "checked" || k === "selected" || k === "disabled" || k === "open") e[k] = !!v;
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v);
+  }
+  for (const k of kids.flat(Infinity)) if (k !== null && k !== undefined && k !== false) e.append(k instanceof Node ? k : document.createTextNode(k));
+  return e;
+}
+function toast(msg, bad) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = bad ? "bad" : ""; t.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = "none"), bad ? 9000 : 5000);
+}
+async function api(path, body) {
+  const opts = { headers: { "X-Loadout-Token": token } };
+  if (body !== undefined) { opts.method = "POST"; opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  if (j.output && j.output.error) throw new Error(j.output.error);
+  return j.output;
+}
+const VERBS = { enable: "Turned on", disable: "Turned off", prefer: "Now using", join: "Joined", leave: "Left", subscribe: "Added", unsubscribe: "Removed", sync: "Updated", approve: "Approved" };
+const friendly = args => VERBS[args[0]] ? [VERBS[args[0]], ...args.slice(1).filter(a => !a.startsWith("-"))].join(" ") : "lo " + args.join(" ") + ": done";
+async function run(args, label, refresh = true) {
+  try {
+    const out = await api("/api/run", { args });
+    const w = (out.warnings || []).join("\n");
+    toast((label || friendly(args)) + (w ? "\n" + w : ""));
+    if (refresh) await show(current, undefined, true);
+    return out;
+  } catch (e) { toast(e.message, true); throw e; }
+}
+const tbl = (head, rows) => el("table", {}, el("thead", {}, el("tr", {}, head.map(h => el("th", {}, h)))), el("tbody", {}, rows));
+const short = s => (s || "").slice(0, 8);
+// A page's heading plus its "About this page" explainer (HELP[id]).
+function pageHead(id, sub, ...right) {
+  const label = (tabs.find(t => t[0] === id) || [])[1] || id;
+  const f = document.createDocumentFragment();
+  f.append(el("div", { class: "page-head" }, el("div", {}, el("h1", {}, label), el("div", { class: "sub" }, sub)), el("div", { class: "row" }, right)));
+  if (HELP[id]) f.append(explainer(id, HELP[id]));
+  return f;
+}
+const syncBtn = () => el("button", { class: "btn primary", title: "Download the latest from your sources and install it into your AI tools (lo sync)", onclick: () => run(["sync"], "Updated") }, "Update now");
+
+// Plain-language names for item states and kinds.
+const STATES = {
+  "enabled": ["On", "Your AI tools have this"],
+  "disabled": ["Off", "Available, but turned off. Turn it on to use it"],
+  "shadowed": ["Replaced", "Another group has its own version, and theirs is used because it's more specific"],
+  "not-for-you": ["Not for your role", "Shared only with a role you don't have"],
+  "not-subscribed": ["Not in your groups", "Shared with a group you're not in"],
+};
+const stateLabel = st => (STATES[st] || [st.replace(/-/g, " ")])[0];
+const KINDS = { skill: "Skill", mcp: "Tool connection", agent: "Subagent", plugin: "Plugin", extra: "Rule or prompt" };
+const kindLabel = k => KINDS[k] || k;
+function ago(t) {
+  if (!t) return "never";
+  const s = (Date.now() - Date.parse(t)) / 1000;
+  if (!(s >= 0)) return t;
+  return s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`;
+}
+// Remembered per browser; the page works the same without storage.
+const pref = {
+  get(k) { try { return localStorage.getItem("loadout." + k); } catch (_) { return null; } },
+  set(k, v) { try { localStorage.setItem("loadout." + k, v); } catch (_) {} },
+};
+
+// "About this page" for each view: what it is, in plain words, and what to do here.
+const HELP = {
+  Overview: ["A summary of what Loadout has set up for you.",
+    "Groups: Loadout works out which company, teams and roles you belong to. Each group can share skills with its members, and you get the ones for your groups."],
+  Catalog: ["Every skill and tool connection your groups share, in one list. Use the search box and filters to narrow it down.",
+    "On: your AI tools have it. Off: available, but turned off. Replaced: another group has its own version, and theirs is used because it's closer to you (your team beats the whole company).",
+    "Click Why? on anything to see who provides it and why you have it."],
+  Layers: ["Your skills, arranged by where they come from: the whole company at the top, then smaller groups, down to you.",
+    "When two layers share something with the same name, the one lower down (closer to you) wins and the other is marked Replaced, unless a layer above has locked it.",
+    "Click Why? on anything to see every version and the rule that picked the winner."],
+  Targets: ["The AI apps Loadout can set up on this computer. Turn on the ones you use.",
+    "Link (recommended) points each app at Loadout's copy, so updates show up straight away. Copy puts separate files in each app, for apps that don't follow links."],
+  Review: ["Some groups ask you to look over their updates before they reach your AI tools. Read what changed, then approve it.",
+    "Updates from groups that don't ask for this arrive on their own when you update."],
+  Sources: ["A source is a shared folder of skills, kept in Git. Usually each team or group has one.",
+    "If your company uses Loadout, its list of groups (the company config) adds the right sources for you. You can also add any source by its address, and preview it first."],
+  Templates: ["A template is a skill with blanks, such as {{team}}. Pick one, answer a few questions, and you get your own copy for your team.",
+    "You can also make a template for other teams: write the skill once, and mark the parts each team should fill in."],
+  Edit: ["Write a new skill, make a template, or change something your team shares.",
+    "Your changes are kept in a private working copy. When you're ready, open a pull request: the source's owners review it, and once they accept it, everyone gets it the next time they update."],
+  Doctor: ["Checks this computer for problems: missing apps, broken links, two things with the same name, secrets saved where they shouldn't be.",
+    "Anything marked warn or fail says what to do about it."],
+};
+function explainer(id, lines) {
+  const d = el("details", { class: "explain", open: pref.get("help." + id) !== "closed" },
+    el("summary", {}, "About this page"), lines.map(l => el("p", {}, l)));
+  d.addEventListener("toggle", () => pref.set("help." + id, d.open ? "open" : "closed"));
+  return d;
+}
+
+const GLOSSARY = [
+  ["Skill", "Written instructions an AI assistant follows for a particular job, such as “write a spec our way” or “what to do when paged”."],
+  ["Tool connection (MCP server)", "Lets an AI assistant use another tool, such as Jira or a database. Passwords are never stored in the shared files."],
+  ["Subagent", "A helper assistant with its own instructions, which your main assistant can hand work to."],
+  ["Rule or prompt", "Shorter instructions: house rules the assistant always follows, or a saved prompt or command."],
+  ["Source", "A shared folder of skills, kept in Git. Usually one per team or group."],
+  ["Company config", "Your company's list of groups: which sources each group has, and who belongs to each. It lets Loadout set you up automatically."],
+  ["Group and layer", "A group is the company, an org, a team, a squad, a role, or just you. Layers rank them: when two groups share something with the same name, the one closest to you wins, unless a higher group has locked it."],
+  ["Template", "A skill with blanks like {{team}}. Each team fills them in to get its own copy."],
+  ["Update (sync)", "Downloads the latest from your sources and installs it into your AI tools. Safe to run any time."],
+  ["AI tool (target)", "An AI app on this computer that Loadout sets up, such as Claude Code, Cursor or Codex."],
+  ["Working copy", "Your private copy of a source, where your edits wait until you share them."],
+  ["Pull request", "A proposed change that the source's owners review before it reaches everyone."],
+  ["Required and locked", "Required: can't be turned off. Locked: groups closer to you can't replace it. Companies use these for things like security rules."],
+];
+// Joining a company company_config: `lo init <url> --non-interactive`.
+function connectCompany() {
+  const url = el("input", { type: "text", class: "grow", placeholder: "https://git.example.com/acme/agent-config", "aria-label": "Company link" });
+  const status = el("div", { style: "margin-top:12px" });
+  const go = async () => {
+    const u = url.value.trim(); if (!u) { url.focus(); return; }
+    status.replaceChildren(el("div", { class: "muted" }, "Connecting: finding your groups, setting up your AI tools and downloading skills. This can take a minute…"));
+    try { await run(["init", u, "--non-interactive"], "Connected to your company", false); closeDrawer(); show("Start"); }
+    catch (e) { status.replaceChildren(el("div", { class: "bad" }, e.message)); }
+  };
+  openDrawer(el("h2", {}, "Connect to your company"),
+    el("p", { class: "muted" }, "Paste the link your company gave you for Loadout (its company_config: the list of groups and their skills). Loadout works out which groups you're in, sets up the AI tools it finds on this computer, and downloads your skills."),
+    el("form", { class: "row", onsubmit: e => { e.preventDefault(); go(); } }, url, el("button", { class: "btn primary", type: "submit" }, "Connect")),
+    status,
+    el("p", { class: "faint", style: "margin-top:16px" }, "No link? Ask whoever looks after AI tools at your company, or add sources one at a time on the Sources page."));
+  url.focus();
+}
+
+function glossary() {
+  openDrawer(el("h2", {}, "What the words mean"),
+    el("p", { class: "muted" }, "Loadout puts the know-how your company and team have written down into the AI assistants you use. These are the words you'll see."),
+    el("dl", { class: "glossary" }, GLOSSARY.map(([t, d]) => [el("dt", {}, t), el("dd", {}, d)])));
+}
+
+function openDrawer(...content) {
+  const d = document.getElementById("drawer");
+  d.replaceChildren(el("div", { class: "row", style: "justify-content:flex-end" }, el("button", { class: "btn ghost", onclick: closeDrawer, "aria-label": "Close" }, "✕ Close")), ...content.flat(Infinity).filter(c => c !== null && c !== undefined && c !== false));
+  d.classList.remove("wide");
+  d.classList.add("open");
+}
+function closeDrawer() { document.getElementById("drawer").classList.remove("open"); }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+async function why(key) {
+  try {
+    const w = await api("/api/why?key=" + encodeURIComponent(key));
+    openDrawer(
+      el("h2", {}, "Why do I have ", el("code", {}, key), "?"),
+      el("p", {}, w.winner ? ["You get the version from ", el("code", {}, w.winner.split(":")[0]), w.enabled ? el("span", { class: "ok" }, " and it's on.") : el("span", { class: "muted" }, ", but it's off.")] : "None of your groups provide it."),
+      el("p", { class: "muted" }, "When several groups provide something with the same name, the one closest to you wins (higher rank), unless a group above has locked it."),
+      tbl(["Provided by", "Group", "Rank", "Result"], w.candidates.map(c => el("tr", {},
+        el("td", { class: "mono" }, c.id), el("td", {}, `${c.layer}:${c.group || "-"}`), el("td", {}, c.rank ?? "-"),
+        el("td", { class: "muted" }, c.outcome + (c.by ? ` (${c.by})` : "") + (c.locked ? " · locked" : ""))))),
+      (w.targets || []).length ? el("div", { style: "margin-top:12px" }, el("h2", {}, "Installed in your AI tools"), (w.targets || []).map(t => el("div", { class: "mono muted" }, `${t.target}: ${t.path}${t.installed ? "" : " (not installed)"}`))) : null);
+  } catch (e) { toast(e.message, true); }
+}
+
+// The button that changes an item's state (Browse skills and Your layers).
+function itemAction(h) {
+  return h.state === "enabled" ? el("button", { class: "btn", title: "Remove it from your AI tools", onclick: () => run(["disable", h.id], "Turned off " + h.name) }, "Turn off")
+    : h.state === "disabled" ? el("button", { class: "btn primary", title: "Add it to your AI tools", onclick: () => run(["enable", h.id], "Turned on " + h.name) }, "Turn on")
+    : h.state === "shadowed" ? el("button", { class: "btn", title: `Use ${h.source}'s version instead of the one that won`, onclick: () => run(["prefer", h.id], `Now using ${h.source}'s ${h.name}`) }, "Use this version")
+    : h.state === "not-subscribed" && h.group ? el("button", { class: "btn", title: `Join the ${h.group} group (${h.layer}:${h.group}) and get what it shares`, onclick: () => run(["join", `${h.layer}:${h.group}`], `Joined ${h.group}`).then(() => run(["sync"], "Updated")) }, "Join group") : null;
+}
+
+// Edit / copy buttons for an item whose source you have (Browse skills and
+// Your layers).
+function authoring(h, synced) {
+  if (!synced.has(h.source)) return null;
+  const key = `${h.kind}/${h.name}`;
+  return el("div", { class: "authoring" },
+    el("button", { class: "btn ghost", title: `Change it in your working copy of ${h.source}, then propose the change`, onclick: () => editItem(h.source, key) }, "Edit"),
+    el("button", { class: "btn ghost", title: "Promote it to a broader layer, or make your own version at a closer one", onclick: () => copyItem(h.source, key) }, "Copy to another layer…"));
+}
+
+const views = {
+  async Start(m) {
+    const [st, tg] = await Promise.all([api("/api/status").catch(() => ({})), api("/api/targets").catch(() => ({ targets: [] }))]);
+    const sources = st.sources || 0, items = st.enabled_items || 0;
+    const tools = (tg.targets || []).filter(t => t.enabled).map(t => t.display);
+    m.append(pageHead("Start", "A two-minute tour, and a checklist to get you set up"));
+    m.append(el("div", { class: "card" },
+      el("p", { class: "lede" }, "Loadout gives the AI assistants you use (Claude Code, Cursor, Codex and others) the know-how your company and team have written down, and keeps it up to date."),
+      el("p", { class: "muted", style: "margin-top:0" }, "You can do everything from these pages. No command line needed."),
+      el("div", { class: "steps3", style: "margin-top:14px" },
+        el("div", { class: "step3" }, el("span", { class: "num" }, "1"), el("b", {}, "Groups share skills"), el("span", { class: "muted" }, "The company, your team, your role: each keeps its instructions for AI assistants in a shared folder (a source).")),
+        el("div", { class: "step3" }, el("span", { class: "num" }, "2"), el("b", {}, "You get your groups' skills"), el("span", { class: "muted" }, "Loadout picks the sources for the groups you're in. If two have the same skill, the one closest to you wins.")),
+        el("div", { class: "step3" }, el("span", { class: "num" }, "3"), el("b", {}, "Your AI tools use them"), el("span", { class: "muted" }, "One click on Update now installs everything into each AI app on this computer.")))));
+    const steps = [
+      { done: sources > 0, t: "Connect to your team's skills", d: sources ? `${sources} source(s) connected.` : "If your company uses Loadout, it has probably sent you a link: connect with it and you're set up for your groups. Or add a single source by its address.",
+        act: sources ? el("button", { class: "btn", onclick: () => show("Sources") }, "See sources")
+          : el("div", { class: "row" }, el("button", { class: "btn primary", onclick: connectCompany }, "I have my company's link"), el("button", { class: "btn", onclick: () => show("Sources") }, "Add a source")) },
+      { done: tools.length > 0, t: "Choose your AI tools", d: tools.length ? "Set up: " + tools.join(", ") + "." : "Tell Loadout which AI apps you use on this computer.",
+        act: el("button", { class: "btn", onclick: () => show("Targets") }, "Pick AI tools") },
+      { done: sources > 0 && !!st.last_sync, t: "Get the latest skills", d: st.last_sync ? `Last updated ${ago(st.last_sync)}. Update again any time; it's safe.` : "Download everything from your sources and install it into your AI tools.",
+        act: el("button", { class: "btn", disabled: !sources, onclick: () => run(["sync"], "Updated") }, "Update now") },
+      { done: items > 0, t: "Pick the skills you want", d: items ? `${items} item(s) on. Browse to see what else is available.` : "Most skills are on already. Browse to see what's there and turn things on or off.",
+        act: el("button", { class: "btn", onclick: () => show("Catalog") }, "Browse skills") },
+    ];
+    const done = steps.filter(x => x.done).length;
+    const next = steps.findIndex(x => !x.done);
+    m.append(el("div", { class: "card" },
+      el("div", { class: "row" }, el("h2", { style: "margin:0" }, done === steps.length ? "You're all set" : "Get set up"), el("span", { class: "grow" }), el("span", { class: "muted" }, `${done} of ${steps.length} done`)),
+      el("div", { class: "progress" }, el("div", { style: `width:${Math.round(100 * done / steps.length)}%` })),
+      el("ol", { class: "checklist" }, steps.map((x, i) => el("li", { class: x.done ? "done" : i === next ? "next" : "" },
+        el("span", { class: "tick", "aria-label": x.done ? "done" : "to do" }, x.done ? "✓" : i + 1),
+        el("div", {}, el("div", { class: "t" }, x.t), el("div", { class: "muted" }, x.d)),
+        x.act)))));
+    m.append(el("div", { class: "card" }, el("h2", {}, "Share what you know (optional)"),
+      el("p", { class: "muted", style: "margin-top:0" }, "Wrote a prompt that works well? Turn it into a skill your team gets automatically, or a template other teams can fill in with their own details. Changes are reviewed by the source's owners before anyone gets them."),
+      el("div", { class: "row" },
+        el("button", { class: "btn", onclick: () => show("Edit") }, "Write a skill"),
+        el("button", { class: "btn", onclick: () => show("Templates") }, "Make a template"),
+        el("button", { class: "btn ghost", onclick: glossary }, "What do these words mean?"))));
+  },
+
+  async Overview(m) {
+    const [st, prof] = await Promise.all([api("/api/status"), api("/api/profile").catch(() => null)]);
+    m.append(pageHead("Overview", "What Loadout has set up for you", syncBtn()));
+    m.append(el("div", { class: "tiles" },
+      el("div", { class: "tile" }, el("div", { class: "n" }, st.enabled_items ?? 0), el("div", { class: "l" }, "skills and tools on")),
+      el("div", { class: "tile" }, el("div", { class: "n" }, st.sources ?? 0), el("div", { class: "l" }, "sources")),
+      el("div", { class: "tile" }, el("div", { class: "n " + (st.pending.length ? "warn" : "") }, st.pending.length), el("div", { class: "l" }, "updates waiting for your OK")),
+      el("div", { class: "tile" }, el("div", { class: "n" }, ago(st.last_sync)), el("div", { class: "l" }, "last updated"))));
+    if (st.conflicts) m.append(el("div", { class: "card bad" }, "Two of your sources provide something with the same name and neither wins. ", el("button", { class: "btn", onclick: () => show("Doctor") }, "Health check")));
+    if (st.pending.length) m.append(el("div", { class: "card warn" }, `${st.pending.length} update(s) wait for you to look them over. `, el("button", { class: "btn", onclick: () => show("Review") }, "See updates")));
+    if (!st.sources) m.append(el("div", { class: "card empty" }, "Nothing set up yet. ", el("button", { class: "btn primary", onclick: () => show("Start") }, "Start here")));
+    if (prof && prof.groups) {
+      const groups = prof.groups.filter(u => u.layer !== "company");
+      m.append(el("div", { class: "card" }, el("h2", {}, "Your groups"),
+        groups.length ? tbl(["Group", "Member", "How it was decided", ""], groups.map(u => el("tr", {},
+          el("td", { class: "mono" }, `${u.layer}:${u.group}`),
+          el("td", {}, u.member ? el("span", { class: "pill enabled" }, "member") : el("span", { class: "pill disabled" }, "not a member")),
+          el("td", { class: "muted" }, u.basis + (u.error ? ` (${u.error})` : "")),
+          el("td", { style: "text-align:right" }, u.member
+            ? el("button", { class: "btn", onclick: () => run(["leave", `${u.layer}:${u.group}`]) }, "Leave")
+            : u.joinable ? el("button", { class: "btn", onclick: () => run(["join", `${u.layer}:${u.group}`]) }, "Join") : ""))))
+          : el("div", { class: "muted" }, "No groups from a company config. You can still add sources yourself on the Sources page.")));
+    }
+  },
+
+  async Catalog(m) {
+    const state = views.Catalog.state || (views.Catalog.state = { q: "", all: false, sel: {} });
+    const facets = [["state", "Status", d => [d.state], stateLabel], ["kind", "Type", d => [d.kind], kindLabel], ["layer", "Layer", d => [d.layer]],
+      ["source", "Source", d => [d.source]], ["group", "Group", d => [d.group || "-"]], ["role", "Role", d => d.roles && d.roles.length ? d.roles : ["(everyone)"]], ["tag", "Tag", d => d.tags || []],
+      ["author", "Author", d => [d.author, ...(d.co_authors || [])].filter(Boolean)]];
+    m.append(pageHead("Catalog", "Everything your groups share. Search or filter, then turn on what you want."));
+    const q = el("input", { type: "search", placeholder: "Search names, descriptions, tags and text…", value: state.q, "aria-label": "Search" });
+    const all = el("input", { type: "checkbox", checked: state.all });
+    const filtersBody = el("div");
+    const filtersBox = el("details", { class: "filters card", open: window.innerWidth > 860 }, el("summary", {}, "Filters"), filtersBody);
+    const results = el("div", { class: "items" });
+    const count = el("span", { class: "muted" });
+    let hits = [];
+    const synced = new Set(((await api("/api/sources").catch(() => ({ sources: [] }))).sources).map(s => s.name));
+    const matches = (d, skip) => facets.every(([k, , f]) => k === skip || !state.sel[k] || !state.sel[k].size || f(d).some(v => state.sel[k].has(v)));
+    const renderFilters = () => {
+      const active = Object.values(state.sel).reduce((n, v) => n + v.size, 0);
+      filtersBox.querySelector("summary").textContent = active ? `Filters (${active})` : "Filters";
+      filtersBody.replaceChildren(el("div", { class: "row", style: "justify-content:flex-end;margin:-26px 0 6px" },
+        el("button", { class: "btn ghost", onclick: () => { state.sel = {}; renderAll(); } }, "Clear")));
+      for (const [k, label, f, show = v => v] of facets) {
+        const counts = new Map();
+        for (const d of hits.filter(d => matches(d, k))) for (const v of f(d)) counts.set(v, (counts.get(v) || 0) + 1);
+        const sel = state.sel[k] || new Set();
+        for (const v of sel) if (!counts.has(v)) counts.set(v, 0);
+        if (!counts.size) continue;
+        const values = [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(b[0]));
+        const box = el("div", { class: "facet" }, el("h3", {}, label));
+        const limit = state["more_" + k] ? Infinity : 6;
+        values.slice(0, limit).forEach(([v, c]) => box.append(el("label", {},
+          el("input", { type: "checkbox", checked: sel.has(v), onchange: e => { const s = state.sel[k] || (state.sel[k] = new Set()); e.target.checked ? s.add(v) : s.delete(v); renderAll(); } }),
+          el("span", {}, show(v)), el("span", { class: "c" }, c))));
+        if (values.length > limit) box.append(el("button", { class: "more", onclick: () => { state["more_" + k] = true; renderFilters(); } }, `Show ${values.length - limit} more`));
+        filtersBody.append(box);
+      }
+    };
+    const renderResults = () => {
+      const shown = hits.filter(d => matches(d));
+      count.textContent = `${shown.length} of ${hits.length} item(s)`;
+      if (!shown.length) { results.replaceChildren(el("div", { class: "card empty" }, hits.length ? "Nothing matches. Try clearing a filter." : state.q ? "Nothing matches your search. Try other words, or include groups you're not in." : "Nothing here yet. Connect a source first (see Start here).")); return; }
+      results.replaceChildren(...shown.map(h => {
+        const key = `${h.kind}/${h.name}`;
+        const act = itemAction(h);
+        return el("div", { class: "item" },
+          el("div", {},
+            el("div", { class: "title" }, el("span", { class: "pill " + h.state, title: (STATES[h.state] || [])[1] }, stateLabel(h.state)), el("span", { class: "kind" }, kindLabel(h.kind)), el("span", { class: "name" }, h.name),
+              el("span", { class: "src mono" }, `${h.source} · ${h.layer}:${h.group || "-"}`)),
+            h.description ? el("div", { class: "desc" }, h.description) : null,
+            byline(h.author, h.co_authors),
+            el("div", {}, (h.roles || []).map(r => el("span", { class: "chip role" }, "role: " + r)), (h.tags || []).map(t => el("span", { class: "chip" }, t))),
+            authoring(h, synced)),
+          el("div", { class: "acts" }, el("button", { class: "btn ghost", title: "Who provides this, and why you have it", onclick: () => why(key) }, "Why?"), act));
+      }));
+    };
+    const renderAll = () => { renderFilters(); renderResults(); };
+    const load = async () => {
+      state.q = q.value.trim(); state.all = all.checked;
+      results.replaceChildren(el("div", { class: "muted" }, "Loading…"));
+      try {
+        const out = await api("/api/search?q=" + encodeURIComponent(state.q) + (state.all ? "&all=1" : ""));
+        hits = out.hits;
+        renderAll();
+      } catch (e) { results.replaceChildren(el("div", { class: "card bad" }, e.message)); }
+    };
+    let timer;
+    q.oninput = () => { clearTimeout(timer); timer = setTimeout(load, 250); };
+    all.onchange = load;
+    m.append(el("div", { class: "catalog" }, filtersBox,
+      el("div", {}, el("div", { class: "searchbar" }, q, el("label", { class: "row muted" }, all, "Include groups I'm not in"), count), results)));
+    await load();
+  },
+
+  async Layers(m) {
+    const state = views.Layers.state || (views.Layers.state = { all: false, kind: "", mine: false });
+    m.append(pageHead("Layers", "Which group each skill comes from, from the whole company down to you", syncBtn()));
+    const [out, prof, lay, srcs] = await Promise.all([
+      api("/api/search?q=" + (state.all ? "&all=1" : "")),
+      api("/api/profile").catch(() => null),
+      api("/api/layers"),
+      api("/api/sources").catch(() => ({ sources: [] })),
+    ]);
+    const synced = new Set(srcs.sources.map(s => s.name));
+    const hits = out.hits.filter(h => (!state.kind || h.kind === state.kind) && (!state.mine || h.state === "enabled"));
+    const res = lay.resolution || {};
+    const byKey = new Map();
+    for (const h of out.hits) { const k = `${h.kind}/${h.name}`; if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(h); }
+    const rank = new Map(lay.layers.map(s => [s.name, s.rank]));
+    const where = id => { const h = out.hits.find(x => x.id === id); return h ? `${h.layer}${h.group ? ":" + h.group : ""}` : id.split(":")[0]; };
+    // What happened to this item against the others with the same name.
+    const note = h => {
+      const key = `${h.kind}/${h.name}`, r = res[key], others = (byKey.get(key) || []).filter(x => x.id !== h.id);
+      if (r && r.winner === h.id) {
+        const beaten = others.filter(x => x.state === "shadowed").map(x => where(x.id));
+        const how = r.rule === "locked" ? "Locked here, so layers below can't replace it" : beaten.length ? "Replaces the version from " + [...new Set(beaten)].join(", ") : "";
+        if (!others.length) return how;
+        return [h.state === "enabled" ? "You get this version" : "This version wins, but it's turned off", how].filter(Boolean).join(". ");
+      }
+      if (h.state === "shadowed" && r && r.winner) return `Replaced by the version from ${where(r.winner)}` + (r.rule === "locked" ? " (locked)" : rank.get(h.layer) < rank.get(where(r.winner).split(":")[0]) ? ", which is closer to you" : "");
+      return h.state === "enabled" || h.state === "disabled" ? "" : (STATES[h.state] || [])[1] || "";
+    };
+    // Layers in rank order, plus any layer an item uses that the model doesn't know.
+    const layers = lay.layers.map(s => s.name);
+    for (const h of hits) if (!layers.includes(h.layer)) layers.push(h.layer);
+    const groups = (prof && prof.groups) || [];
+    const chain = layers.flatMap(sc => groups.filter(u => u.layer === sc && u.member).map(u => sc === "company" ? u.group : `${sc}: ${u.group}`));
+    if (chain.length) m.append(el("div", { class: "card" }, el("h2", {}, "Your chain"),
+      el("div", { class: "chain" }, [...chain, "you"].map((c, i) => [i ? el("span", { class: "faint" }, "→") : null, el("span", { class: "chip" + (i === chain.length ? " role" : "") }, c)])),
+      el("div", { class: "muted", style: "margin-top:6px" }, "From the broadest group to you. When two have the same thing, the one further right wins, unless a group to the left has locked it.")));
+    const kinds = [...new Set(out.hits.map(h => h.kind))].sort();
+    const kindSel = el("select", { "aria-label": "Type", onchange: e => { state.kind = e.target.value; show("Layers"); } },
+      el("option", { value: "" }, "All types"), kinds.map(k => el("option", { value: k, selected: k === state.kind }, kindLabel(k))));
+    m.append(el("div", { class: "row", style: "margin-bottom:12px" }, kindSel,
+      el("label", { class: "row muted" }, el("input", { type: "checkbox", checked: state.mine, onchange: e => { state.mine = e.target.checked; show("Layers"); } }), "Only what I get"),
+      el("label", { class: "row muted" }, el("input", { type: "checkbox", checked: state.all, onchange: e => { state.all = e.target.checked; show("Layers"); } }), "Include groups I'm not in")));
+    m.append(el("div", { class: "layer-legend" },
+      el("span", {}, "↓ Lower layers are closer to you and win ties"),
+      el("span", {}, el("span", { class: "pill enabled" }, "On"), " you get it"),
+      el("span", {}, el("span", { class: "pill shadowed" }, "Replaced"), " a lower layer has its own version")));
+    const memberOf = (layer, group) => groups.some(u => u.layer === layer && u.group === group && u.member);
+    const layerList = el("ol", { class: "layers" });
+    let shown = 0;
+    for (const layer of layers) {
+      const inLayer = hits.filter(h => h.layer === layer);
+      const myGroups = groups.filter(u => u.layer === layer && u.member).map(u => u.group);
+      if (!inLayer.length && !myGroups.length) continue;
+      shown++;
+      const byGroup = new Map();
+      for (const u of myGroups) byGroup.set(u, []);
+      for (const h of inLayer) { const g = h.group || ""; if (!byGroup.has(g)) byGroup.set(g, []); byGroup.get(g).push(h); }
+      const card = el("div", { class: "card" },
+        el("div", { class: "layer-head" }, el("h2", {}, layer === "user" ? "You" : layer),
+          el("span", { class: "faint" }, rank.has(layer) ? `rank ${rank.get(layer)}` : "not in the company config's layers"),
+          el("span", { class: "grow" }), el("span", { class: "muted" }, `${inLayer.filter(h => h.state === "enabled").length} on · ${inLayer.length} total`)));
+      for (const [group, items] of byGroup) {
+        const member = group ? memberOf(layer, group) : true;
+        const srcs = [...new Set(items.map(h => h.source))];
+        card.append(el("div", { class: "group" },
+          el("div", { class: "group-head" },
+            el("span", { class: "n" }, group || (layer === "user" ? "Your own source" : "Everyone in this layer")),
+            group ? el("span", { class: member ? "pill enabled" : "pill not-subscribed" }, member ? "you're in this group" : "not your group") : null,
+            srcs.map(s => el("span", { class: "chip", title: "Source" }, s))),
+          items.length ? items.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)).map(h => {
+            const r = res[`${h.kind}/${h.name}`];
+            return el("div", { class: "litem " + (h.state === "enabled" ? "win" : h.state === "shadowed" ? "lose" : "") },
+              el("span", { class: "pill " + h.state, title: (STATES[h.state] || [])[1] }, stateLabel(h.state)),
+              el("div", {}, el("span", { class: "kind" }, kindLabel(h.kind)), " ", el("b", {}, h.name),
+                h.description ? el("div", { class: "muted" }, h.description) : null,
+                byline(h.author, h.co_authors),
+                el("div", { class: "note" }, note(h)),
+                authoring(h, synced)),
+              el("div", { class: "acts row" }, el("button", { class: "btn ghost", title: "Every version of this and why this one was picked", onclick: () => why(`${h.kind}/${h.name}`) }, "Why?"),
+                // "Use this version" only settles a tie between groups at the same rank.
+                h.state !== "shadowed" || (r && r.winner && rank.get(where(r.winner).split(":")[0]) === rank.get(h.layer)) ? itemAction(h) : null));
+          }) : el("div", { class: "faint", style: "padding-left:16px" }, "Nothing shared from this group yet.")));
+      }
+      layerList.append(el("li", { class: "layer" + (inLayer.length ? "" : " empty-layer") }, el("span", { class: "dot" }, shown), card));
+    }
+    m.append(shown ? layerList : el("div", { class: "card empty" }, out.hits.length ? "Nothing matches these filters." : "Nothing here yet. Connect a source first (see Start here)."));
+  },
+
+  async Sources(m) {
+    const out = await api("/api/sources");
+    m.append(pageHead("Sources", "The shared folders your skills come from", syncBtn()));
+    const byName = new Map(out.sources.map(s => [s.name, s]));
+    const kids = new Map();
+    for (const s of out.sources) if (s.via && byName.has(s.via)) { if (!kids.has(s.via)) kids.set(s.via, []); kids.get(s.via).push(s); }
+    const node = s => el("li", {},
+      el("div", { class: "node" },
+        el("span", { class: "n" }, s.name),
+        s.via ? el("span", { class: "badge upstream", title: `${s.via} builds on this source, so you get it too` }, "included by " + s.via) : s.manual ? el("span", { class: "badge", title: "You added this source yourself" }, "added by you") : el("span", { class: "badge", title: "Added because you're in one of your company's groups" }, "from your company"),
+        el("span", { class: "mono faint" }, short(s.commit)),
+        el("span", { class: "grow" }),
+        el("button", { class: "btn ghost", onclick: () => { current = "Catalog"; (views.Catalog.state = { q: "", all: false, sel: { source: new Set([s.name]) } }); show("Catalog"); } }, "See its skills"),
+        el("button", { class: "btn ghost", onclick: () => show("Edit", { source: s.name }) }, "Edit"),
+        s.manual && !s.via ? el("button", { class: "btn", onclick: () => confirm(`Remove ${s.name}? Its skills will be taken out of your AI tools.`) && run(["unsubscribe", s.url], "Removed " + s.name).then(() => run(["sync"], "Updated")) }, "Remove") : null),
+      el("div", { class: "mono faint", style: "margin:-6px 0 6px;overflow-wrap:anywhere;font-size:11.5px" }, s.url),
+      kids.has(s.name) ? el("ul", { class: "tree" }, kids.get(s.name).map(node)) : null);
+    const roots = out.sources.filter(s => !s.via || !byName.has(s.via));
+    m.append(el("div", { class: "card" },
+      out.company_config ? el("div", { class: "muted", style: "margin-bottom:6px" }, "Your company's list of groups (company config): ", el("span", { class: "mono" }, out.company_config)) : null,
+      roots.length ? el("ul", { class: "tree" }, roots.map(node)) : el("div", { class: "empty" }, "No sources yet. Add one below: paste the address someone gave you.")));
+
+    const url = el("input", { type: "text", class: "grow", placeholder: "https://git.example.com/acme/team-skills (or the path to a local Git repo)", "aria-label": "Source URL" });
+    const preview = el("div");
+    const doPreview = async () => {
+      const u = url.value.trim(); if (!u) return;
+      preview.replaceChildren(el("div", { class: "muted", style: "margin-top:10px" }, "Fetching…"));
+      try {
+        const p = await api("/api/preview?url=" + encodeURIComponent(u));
+        const total = p.sources.reduce((n, s) => n + s.items.length, 0);
+        preview.replaceChildren(...[
+          el("div", { class: "row", style: "margin:12px 0 4px" }, el("b", {}, `${p.sources.length} source(s), ${total} item(s)`),
+            p.sources.length > 1 ? el("span", { class: "muted" }, "including the sources it builds on") : null, el("span", { class: "grow" }),
+            el("button", { class: "btn primary", onclick: async () => { await run(["subscribe", u], "Added", false); await run(["sync"], "Updated"); } }, "Add and update")),
+          p.sources.map((s, i) => el("details", { class: "src-preview", open: i === 0 },
+            el("summary", {}, el("b", {}, s.name), el("span", { class: "mono muted" }, `${s.layer}:${s.group || "-"}`),
+              s.via ? el("span", { class: "badge upstream" }, "upstream of " + s.via) : null, el("span", { class: "faint" }, `${s.items.length} item(s)`)),
+            s.description ? el("div", { class: "muted", style: "margin:4px 0 4px 18px" }, s.description) : null,
+            el("div", { style: "margin-left:18px" }, s.items.map(it => el("div", { class: "row", style: "margin-top:4px" },
+              el("span", { class: "kind" }, it.kind), el("span", { class: "mono" }, it.name), el("span", { class: "muted" }, it.description || ""))),
+              (s.templates || []).map(t => el("div", { class: "row", style: "margin-top:4px" }, el("span", { class: "kind" }, "template"), el("span", { class: "mono" }, t.split("/").pop())))))),
+          (p.warnings || []).map(w => el("div", { class: "warn" }, w))].flat(Infinity));
+      } catch (e) { preview.replaceChildren(el("div", { class: "bad", style: "margin-top:10px" }, e.message)); }
+    };
+    if (!out.company_config) m.append(el("div", { class: "card row" }, el("span", { class: "grow" }, el("b", {}, "Got a link from your company? "), el("span", { class: "muted" }, "Connect once and you get the sources for all your groups.")),
+      el("button", { class: "btn", onclick: connectCompany }, "Connect to your company")));
+    m.append(el("div", { class: "card" }, el("h2", {}, "Add a source"),
+      el("div", { class: "muted", style: "margin-bottom:8px" }, "Paste a source's address (from your team, or a Git link) and click Look inside to see what you'd get. Nothing changes until you click Add."),
+      el("form", { class: "row", onsubmit: e => { e.preventDefault(); doPreview(); } }, url, el("button", { class: "btn", type: "submit" }, "Look inside")), preview));
+  },
+
+  async Templates(m) {
+    const state = views.Templates.state || (views.Templates.state = { all: false });
+    const all = el("input", { type: "checkbox", checked: state.all, onchange: e => { state.all = e.target.checked; show("Templates"); } });
+    const [list, srcs] = await Promise.all([api("/api/templates" + (state.all ? "?all=1" : "")), api("/api/sources")]);
+    m.append(pageHead("Templates", "Fill-in-the-blanks skills. Use one to get your own copy, or make one for other teams.",
+      el("label", { class: "row muted" }, all, "Include sources I'm not subscribed to"),
+      el("button", { class: "btn primary", onclick: () => newTemplate(srcs.sources) }, "New template…")));
+    if (!list.templates.length) {
+      m.append(el("div", { class: "card empty" },
+        el("p", {}, "No templates in your sources yet."),
+        el("p", { class: "muted" }, "A template is a skill with blanks, like ", el("code", {}, "{{team}}"), ", that each team fills in to get its own version."),
+        el("div", { class: "row", style: "justify-content:center" },
+          el("button", { class: "btn primary", onclick: () => newTemplate(srcs.sources) }, "Make a template"),
+          el("button", { class: "btn", onclick: () => newTemplate(srcs.sources, STARTERS[0]) }, "Start from an example"))));
+      return;
+    }
+    for (const t of list.templates) {
+      m.append(el("div", { class: "card" },
+        el("div", { class: "row" }, el("span", { class: "kind" }, "template"), el("b", {}, t.name), el("span", { class: "mono muted" }, t.source),
+          t.not_subscribed ? el("span", { class: "badge" }, "from a source you don't have") : null, el("span", { class: "grow" }),
+          el("button", { class: "btn primary", onclick: () => useTemplate(t, srcs.sources) }, "Use this template…")),
+        t.description ? el("div", { style: "margin-top:4px" }, t.description) : null,
+        el("div", { class: "muted", style: "margin-top:4px" }, t.variables.length ? "Asks for: " + t.variables.map(v => v.default === undefined ? v.name : `${v.name} (default ${v.default})`).join(", ") : "Nothing to fill in"),
+        el("div", {}, (t.tags || []).map(x => el("span", { class: "chip" }, x)))));
+    }
+  },
+
+  async Targets(m) {
+    const out = await api("/api/targets");
+    m.append(pageHead("Targets", "The AI apps on this computer that get your skills"));
+    m.append(el("div", { class: "card" }, tbl(["", "App", "How", "Where the files go", ""], out.targets.map(t => el("tr", {},
+      el("td", {}, t.enabled ? el("span", { class: "pill enabled" }, "on") : el("span", { class: "pill disabled" }, "off")),
+      el("td", {}, t.display, t.detected ? "" : el("div", { class: "faint" }, "not detected")),
+      el("td", {}, el("select", { "aria-label": "Placement", onchange: e => run(["targets", "mode", t.id, e.target.value]) },
+        [["symlink", "Link (recommended)"], ["copy", "Copy"]].map(([mode, label]) => el("option", { value: mode, selected: mode === t.mode }, label)))),
+      el("td", { class: "mono muted" }, t.paths.map(p => el("div", {}, `${p.kind}: ${p.path}`))),
+      el("td", { style: "text-align:right" }, el("button", { class: "btn", onclick: () => run(["targets", t.enabled ? "disable" : "enable", t.id]) }, t.enabled ? "Disable" : "Enable")))))));
+  },
+
+  async Review(m) {
+    const out = await api("/api/diff");
+    m.append(pageHead("Review", "Updates waiting for you to look them over", out.changes.length > 1 ? el("button", { class: "btn primary", onclick: () => run(["approve", "--all"], "Approved every update") }, "Approve all") : null));
+    if (!out.changes.length) { m.append(el("div", { class: "card empty" }, "You're up to date. Nothing is waiting for you.")); return; }
+    for (const c of out.changes) {
+      m.append(el("div", { class: "card" },
+        el("div", { class: "row" }, el("b", {}, c.source), el("span", { class: "mono muted" }, `${short(c.from) || "(new)"} → ${short(c.to)}`),
+          el("span", { class: "pill " + (c.reason === "blocked" ? "not-for-you" : "shadowed") }, c.reason === "blocked" ? "held back" : "needs your OK"), el("span", { class: "grow" }),
+          c.reason === "blocked" ? el("span", { class: "muted" }, "Held back: the safety check found something risky. Ask the source's owners, or approve in a terminal with `lo approve --force-audit`.")
+            : el("button", { class: "btn primary", onclick: () => run(["approve", c.source], "Approved " + c.source) }, "Approve")),
+        (c.findings || []).map(f => el("div", { class: "warn mono" }, `${f.severity} ${f.item} ${f.file}:${f.line} ${f.message}`)),
+        el("details", { open: (c.diff || "").length < 4000 }, el("summary", { class: "muted", style: "cursor:pointer;margin-top:8px" }, "What changed"), el("pre", {}, c.diff || "(no text changes)"))));
+    }
+  },
+
+  async Edit(m, opts = {}) {
+    const out = await api("/api/sources");
+    m.append(pageHead("Edit", "Write skills and templates for your team, or change what a source shares"));
+    if (!out.sources.length) { m.append(el("div", { class: "card empty" }, "You need a source to save into first. ", el("button", { class: "btn primary", onclick: () => show("Sources") }, "Add a source"))); return; }
+    const src = el("select", { "aria-label": "Source" }, srcOptions(out.sources, opts.source));
+    const key = el("input", { type: "text", placeholder: "skill/write-spec", value: opts.key || "", list: "edit-items", "aria-label": "Item" });
+    const items = el("datalist", { id: "edit-items" });
+    const hits = (await api("/api/search?q=").catch(() => ({ hits: [] }))).hits;
+    const fillItems = () => items.replaceChildren(...hits.filter(h => h.source === src.value).map(h => el("option", { value: `${h.kind}/${h.name}` }, h.description || "")));
+    src.onchange = fillItems;
+    fillItems();
+    const choice = (title, text, label, go, primary) => el("div", { class: "step3" }, el("b", {}, title), el("div", { class: "muted", style: "margin:2px 0 10px" }, text),
+      el("button", { class: "btn" + (primary ? " primary" : ""), onclick: go }, label));
+    m.append(el("div", { class: "card" }, el("h2", {}, "Create something new"),
+      el("div", { class: "steps3 plain" },
+        choice("Write a skill", "Fill in a short form: what it's for, and the steps the AI should follow.", "Write a skill…", () => newSkill(out.sources, src.value), true),
+        choice("Make a template", "A skill with blanks that each team fills in, like {{team}}. Start from an example.", "Make a template…", () => newTemplate(out.sources)),
+        choice("Share skills you already have", "Found skills in your AI tools that Loadout didn't install? Copy them into a source.", "Find my skills…", () => adoptSkills(out.sources, src.value)))));
+    m.append(el("div", { class: "card" }, el("h2", {}, "How sharing works"),
+      el("ol", { class: "flow" },
+        el("li", {}, el("b", {}, "Save"), " Your changes go to a private working copy of the source."),
+        el("li", {}, el("b", {}, "Open a pull request"), " This asks the source's owners to accept your change."),
+        el("li", {}, el("b", {}, "They review it"), " and merge it, or suggest edits."),
+        el("li", {}, el("b", {}, "Everyone gets it"), " the next time they update."))));
+    const msg = el("input", { type: "text", class: "grow", placeholder: "What changed (commit message and PR title)", "aria-label": "Message" });
+    const open = () => key.value.trim() ? editItem(src.value, key.value.trim()) : toast("Pick an item", true);
+    const copy = () => key.value.trim() ? copyItem(src.value, key.value.trim()) : toast("Pick an item", true);
+    m.append(el("div", { class: "card" }, el("h2", {}, "Change something a source shares"),
+      el("div", { class: "row" }, "Source", src, "item", key, items, el("button", { class: "btn primary", onclick: open }, "Edit"), el("button", { class: "btn", onclick: copy }, "Copy to another layer…")),
+      el("div", { class: "faint", style: "font-size:12px;margin-top:4px" }, "Items are named type/name, e.g. skill/write-spec, agent/code-reviewer or mcp/jira. You can also click Edit on any item in Browse skills or Your layers."),
+      el("div", { class: "muted", style: "margin-top:10px" }, el("b", {}, "Copy to another layer"), " promotes something to a broader group (so more people get it), or clones it down to your team or yourself so you can make your own version."),
+      el("h3", {}, "Share saved changes"),
+      el("div", { class: "row" }, msg, el("button", { class: "btn", onclick: () => exportPr(src.value, msg.value) }, "Open pull request")),
+      el("div", { class: "faint", style: "font-size:12px;margin-top:4px" }, "Proposes everything you've saved in your working copy of the selected source.")));
+    if (opts.key) await open();
+  },
+
+  async Doctor(m) {
+    const out = await api("/api/doctor");
+    m.append(pageHead("Doctor", "Is everything on this computer working?"));
+    m.append(el("div", { class: "card" }, tbl(["", "Check", "Result"], out.checks.map(c => el("tr", {},
+      el("td", {}, el("span", { class: "pill " + (c.status === "ok" ? "enabled" : c.status === "warn" ? "shadowed" : "not-for-you") }, c.status)),
+      el("td", { class: "mono" }, c.check), el("td", {}, c.message))))));
+  },
+};
+
+async function exportPr(source, message) {
+  try {
+    const r = await api("/api/export", { source, message: message || "Update agent configuration" });
+    toast(r.pull_request ? `Pull request #${r.pull_request.number}: ${r.pull_request.url}` : `Pushed ${r.branch}` + ((r.warnings || []).length ? "\n" + r.warnings.join("\n") : ""));
+    return r;
+  } catch (e) { toast(e.message, true); }
+}
+
+// After a skill lands in a working clone: review it, or open a pull request.
+function createdCard(source, key, path, warnings) {
+  const msg = el("input", { type: "text", class: "grow", value: `Add ${key}`, "aria-label": "Pull request title" });
+  return el("div", { class: "card", style: "margin-top:14px" },
+    el("div", { class: "ok" }, `Created ${source}:${key}`), path ? el("div", { class: "mono muted", style: "overflow-wrap:anywhere" }, path) : null,
+    (warnings || []).map(w => el("div", { class: "warn" }, w)),
+    el("div", { class: "row", style: "margin-top:10px" }, el("button", { class: "btn", onclick: () => editItem(source, key) }, "Review in editor")),
+    el("div", { class: "row" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(source, msg.value) }, "Open pull request")));
+}
+
+// Source <option>s labelled with their layer (layer:group).
+const srcLabel = s => s.layer ? `${s.name} (${s.layer}${s.group ? ":" + s.group : ""})` : s.name;
+const srcOptions = (sources, selected) => sources.map(s => el("option", { value: s.name, selected: s.name === selected }, srcLabel(s)));
+// "By Ada, with Grace": who wrote an item.
+function byline(author, coAuthors) {
+  const co = (coAuthors || []).filter(Boolean);
+  if (!author && !co.length) return null;
+  return el("div", { class: "byline" }, author ? ["By ", el("b", {}, author)] : null, co.length ? (author ? ", with " : "With ") + co.join(", ") : null);
+}
+let whoami;
+const me = async () => whoami !== undefined ? whoami : (whoami = (await api("/api/whoami").catch(() => ({}))).name || "");
+// A "me" button that fills (or appends to) a text input.
+const meButton = (input, append) => el("button", { class: "btn ghost", type: "button", title: "Use your Git user.name", onclick: async () => {
+  const n = await me(); if (!n) { toast("Set your name with: git config --global user.name \"Your Name\"", true); return; }
+  if (!append) input.value = n; else if (!list(input.value).some(x => x.toLowerCase() === n.toLowerCase())) input.value = [...list(input.value), n].join(", ");
+  input.dispatchEvent(new Event("input"));
+} }, append ? "+ Add me" : "Me");
+
+// Edit an item in a source's working copy: a form for the common fields
+// (only the fields you change are rewritten), or the whole file.
+async function editItem(source, key) {
+  let r;
+  try { r = await api(`/api/source-item?source=${encodeURIComponent(source)}&key=${encodeURIComponent(key)}`); }
+  catch (e) { toast(e.message, true); return; }
+  if (!r.text) { toast(`${source} has no ${key} yet. Use "Write a skill" to create one.`, true); return; }
+  const g = (r.meta && r.meta.loadout) || {};
+  const init = {
+    description: (r.meta && r.meta.description) || "", author: g.author || "", co_authors: (g.co_authors || []).join(", "),
+    tags: (g.tags || []).join(", "), mode: g.mode || "", roles: ((g.applies_to || {}).role || []).join(", "), locked: !!g.locked, body: r.body || "",
+  };
+  const f = {
+    description: el("textarea", { style: "min-height:64px", "aria-label": "Description" }),
+    author: el("input", { type: "text", placeholder: "Who wrote it", "aria-label": "Author" }),
+    co_authors: el("input", { type: "text", placeholder: "Others who helped, separated by commas", "aria-label": "Co-authors" }),
+    tags: el("input", { type: "text", "aria-label": "Tags" }),
+    mode: el("select", { "aria-label": "Mode" }, [["", "source default"], ["default-on", "default-on: installed, can be turned off"], ["default-off", "default-off: people opt in"], ["required", "required: can't be turned off"]].map(([v, l]) => el("option", { value: v }, l))),
+    roles: el("input", { type: "text", placeholder: "empty: everyone", "aria-label": "Roles" }),
+    locked: el("input", { type: "checkbox", "aria-label": "Locked" }),
+    body: el("textarea", { style: "min-height:220px", spellcheck: "false", "aria-label": "Instructions" }),
+  };
+  const fill = () => { for (const [k, i] of Object.entries(f)) i.type === "checkbox" ? (i.checked = init[k]) : (i.value = init[k]); };
+  fill();
+  const raw = el("textarea", { spellcheck: "false", style: "min-height:420px", "aria-label": "File" });
+  raw.value = r.text;
+  const result = el("div");
+  const saved = path => {
+    const msg = el("input", { type: "text", class: "grow", value: `Update ${key}`, "aria-label": "Pull request title" });
+    result.replaceChildren(el("div", { class: "card", style: "margin-top:14px" },
+      el("div", { class: "ok" }, `Saved ${path} in your working copy of ${source}.`),
+      el("div", { class: "muted" }, "Nothing is shared until the pull request is merged."),
+      el("div", { class: "row", style: "margin-top:8px" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(source, msg.value) }, "Open pull request"))));
+  };
+  const reload = async () => {
+    const n = await api(`/api/source-item?source=${encodeURIComponent(source)}&key=${encodeURIComponent(key)}`);
+    raw.value = n.text;
+    const ng = (n.meta && n.meta.loadout) || {};
+    Object.assign(init, { description: (n.meta && n.meta.description) || "", author: ng.author || "", co_authors: (ng.co_authors || []).join(", "),
+      tags: (ng.tags || []).join(", "), mode: ng.mode || "", roles: ((ng.applies_to || {}).role || []).join(", "), locked: !!ng.locked, body: n.body || "" });
+  };
+  const saveForm = async () => {
+    const now = { description: f.description.value.trim().replace(/\s+/g, " "), author: f.author.value.trim(), co_authors: f.co_authors.value, tags: f.tags.value,
+      mode: f.mode.value, roles: f.roles.value, locked: f.locked.checked, body: f.body.value };
+    const fields = {};
+    for (const k of Object.keys(now)) {
+      if (k === "description" ? now[k] === init[k].trim().replace(/\s+/g, " ") : k === "body" ? now[k] === init[k] : String(now[k]) === String(init[k])) continue;
+      fields[k] = ["co_authors", "tags", "roles"].includes(k) ? list(now[k]) : now[k];
+    }
+    if (fields.tags && fields.tags.some(t => !KEBAB.test(t))) { toast("Tags: kebab-case words.", true); return; }
+    if (!Object.keys(fields).length) { toast("Nothing changed"); return; }
+    try { const s = await api("/api/source-item", { source, key, fields }); await reload(); saved(s.path); }
+    catch (e) { toast(e.message, true); }
+  };
+  const saveFile = async () => {
+    try { const s = await api("/api/source-item", { source, key, text: raw.value }); await reload(); fill(); saved(s.path); }
+    catch (e) { toast(e.message, true); }
+  };
+  const formView = el("div", {},
+    el("div", { class: "form-grid" },
+      el("label", {}, "Description"), f.description, el("div", { class: "hint" }, "What it does, then \"Use when …\". Agents load skills based on this."),
+      el("label", {}, "Author"), el("div", { class: "row nowrap" }, f.author, meButton(f.author)),
+      el("label", {}, "Co-authors"), el("div", { class: "row nowrap" }, f.co_authors, meButton(f.co_authors, true)),
+      el("label", {}, "Tags"), f.tags,
+      el("label", {}, "Mode"), f.mode,
+      el("label", {}, "Only for roles"), f.roles,
+      el("label", {}, "Locked"), el("label", { class: "row muted" }, f.locked, "Lower layers can't turn it off or replace it"),
+      el("label", {}, "Instructions"), f.body),
+    el("div", { class: "muted", style: "font-size:12px;margin-top:6px" }, "Only the fields you change are rewritten; everything else in the file stays as it is."),
+    el("div", { class: "row", style: "margin-top:12px" }, el("button", { class: "btn primary", onclick: saveForm }, "Save changes")));
+  const fileView = el("div", { hidden: true }, raw,
+    el("div", { class: "row", style: "margin-top:8px" }, el("button", { class: "btn primary", onclick: saveFile }, "Save file")));
+  const tabBtn = (label, on) => el("button", { class: "btn" + (on ? " primary" : ""), type: "button" }, label);
+  const tForm = tabBtn("Form", !!r.meta), tFile = tabBtn("Whole file", !r.meta);
+  const pick = form => { formView.hidden = !form; fileView.hidden = form; tForm.className = "btn" + (form ? " primary" : ""); tFile.className = "btn" + (form ? "" : " primary"); if (form) fill(); };
+  tForm.onclick = () => r.meta ? pick(true) : toast("The frontmatter doesn't parse; fix it in the whole-file view first.", true);
+  tFile.onclick = () => pick(false);
+  pick(!!r.meta);
+  openDrawer(el("h2", {}, "Edit ", el("code", {}, key)),
+    el("div", { class: "row" }, el("span", { class: "muted" }, "in"), el("span", { class: "mono" }, source), el("span", { class: "faint mono" }, r.path), el("span", { class: "grow" }),
+      el("button", { class: "btn ghost", onclick: () => copyItem(source, key) }, "Copy to another layer…")),
+    el("div", { class: "row", style: "margin:10px 0" }, tForm, tFile),
+    formView, fileView, result);
+  document.getElementById("drawer").classList.add("wide");
+}
+
+// Copy an item to another source: promote it to a broader layer, or clone
+// it down to a closer one and customize it there.
+async function copyItem(source, key) {
+  let srcs, lay;
+  let item;
+  try {
+    [srcs, lay, item] = await Promise.all([api("/api/sources"), api("/api/layers"), api(`/api/source-item?source=${encodeURIComponent(source)}&key=${encodeURIComponent(key)}`)]);
+  } catch (e) { toast(e.message, true); return; }
+  if (!item.text) { toast(`${source} has no ${key} in your working copy`, true); return; }
+  const rank = new Map(lay.layers.map(s => [s.name, s.rank]));
+  const from = srcs.sources.find(s => s.name === source) || { name: source };
+  const fr = rank.get(from.layer);
+  const dir = s => { const r = rank.get(s.layer); return r === undefined || fr === undefined || r === fr ? "same" : r < fr ? "up" : "down"; };
+  const others = srcs.sources.filter(s => s.name !== source);
+  if (!others.length) { toast("You need a second source to copy into. Add one on the Sources page.", true); return; }
+  const remove = el("input", { type: "checkbox" }), coauthor = el("input", { type: "checkbox" });
+  const removeLabel = el("span"), go = el("button", { class: "btn primary" }), hint = el("div", { class: "muted", style: "margin-top:6px" });
+  const result = el("div");
+  let to = null;
+  const choose = s => {
+    to = s;
+    const d = dir(s);
+    remove.checked = d === "up"; coauthor.checked = d !== "up";
+    removeLabel.textContent = d === "up" ? `Remove it from ${source} (recommended: otherwise ${source}'s copy keeps replacing the shared one for its group)` : `Move it: remove it from ${source}`;
+    go.textContent = d === "up" ? "Promote" : d === "down" ? "Clone and edit" : "Copy";
+    hint.textContent = d === "up" ? `Everyone in ${s.layer}${s.group ? ":" + s.group : ""} gets it once ${s.name}'s owners merge the pull request.`
+      : d === "down" ? `Your copy in ${s.name} replaces ${source}'s version for ${s.layer}${s.group ? ":" + s.group : ""}, unless ${source} has locked it.`
+      : "Both sources are at the same layer; people in both get whichever wins the tie.";
+  };
+  const group = (title, d, blurb) => {
+    const opts = others.filter(s => dir(s) === d);
+    if (!opts.length) return null;
+    return el("div", { class: "copy-group" }, el("h3", {}, title), el("div", { class: "muted", style: "margin:-4px 0 6px" }, blurb),
+      opts.map(s => el("label", { class: "copy-opt" }, el("input", { type: "radio", name: "copy-to", onchange: () => choose(s) }),
+        el("span", { class: "n" }, s.name), el("span", { class: "chip" }, `${s.layer || "?"}${s.group ? ":" + s.group : ""}`), rank.has(s.layer) ? el("span", { class: "faint" }, `rank ${rank.get(s.layer)}`) : null)));
+  };
+  const run = async () => {
+    if (!to) { toast("Pick where to copy it", true); return; }
+    try {
+      const r = await api("/api/copy-item", { key, from: source, to: to.name, remove: remove.checked, co_author: coauthor.checked });
+      const d = dir(to);
+      const msg = el("input", { type: "text", class: "grow", value: d === "up" ? `Promote ${key} from ${source}` : `Add our own ${key} (from ${source})`, "aria-label": "Pull request title" });
+      const msgFrom = el("input", { type: "text", class: "grow", value: `Remove ${key} (moved to ${to.name})`, "aria-label": "Pull request title" });
+      result.replaceChildren(el("div", { class: "card", style: "margin-top:14px" },
+        el("div", { class: "ok" }, `${r.moved ? "Moved" : "Copied"} ${key} to ${to.name}`), el("div", { class: "mono muted" }, r.path),
+        r.co_author_added ? el("div", { class: "muted" }, `Added ${r.co_author_added} as a co-author.`) : null,
+        (r.warnings || []).map(w => el("div", { class: "warn" }, w)),
+        el("div", { class: "row", style: "margin-top:10px" }, el("button", { class: "btn" + (d === "up" ? "" : " primary"), onclick: () => editItem(to.name, key) }, "Edit the copy")),
+        el("div", { class: "row" }, msg, el("button", { class: "btn" + (d === "up" ? " primary" : ""), onclick: () => exportPr(to.name, msg.value) }, `Open pull request for ${to.name}`)),
+        r.moved ? el("div", { class: "row" }, msgFrom, el("button", { class: "btn", onclick: () => exportPr(source, msgFrom.value) }, `Open pull request for ${source}`)) : null));
+    } catch (e) { toast(e.message, true); }
+  };
+  go.onclick = run;
+  const asTemplate = key.startsWith("skill/") ? el("div", { class: "card", style: "margin-top:14px" },
+    el("b", {}, "Or make it a template"), el("div", { class: "muted", style: "margin:2px 0 8px" }, "Each team fills in its own details (like {{team}}) and gets its own copy, instead of one shared version."),
+    el("button", { class: "btn", onclick: () => {
+      newTemplate(srcs.sources, { name: key.split("/")[1] + "-template", description: (item.meta && item.meta.description) || "", body: item.body || item.text, vars: [], into: (to || from).name });
+      toast("Now replace the team-specific parts with blanks like {{team}}.");
+    } }, "Turn into a template…")) : null;
+  openDrawer(el("h2", {}, "Copy ", el("code", {}, key), " to another layer"),
+    el("p", { class: "muted" }, "From ", el("span", { class: "mono" }, source), from.layer ? ` (${from.layer}${from.group ? ":" + from.group : ""})` : "", ". The copy goes to your working copy of the other source; nothing is shared until its pull request is merged."),
+    group("Promote: share it more widely", "up", "A broader layer, so more people get it."),
+    group("Clone down: make your own version", "down", "A layer closer to you. Your copy replaces this one for that group, and you can change it."),
+    group("Same layer", "same", "Another source at the same layer."),
+    el("div", { style: "margin-top:12px" },
+      el("label", { class: "check muted" }, remove, removeLabel),
+      el("label", { class: "check muted" }, coauthor, "Add me as a co-author of the copy")),
+    hint,
+    el("div", { class: "row", style: "margin-top:12px" }, go),
+    result, asTemplate);
+  const first = others.find(s => dir(s) === "down") || others[0];
+  const radios = [...document.querySelectorAll('#drawer input[name="copy-to"]')];
+  const idx = ["up", "down", "same"].flatMap(d => others.filter(s => dir(s) === d)).indexOf(first);
+  if (radios[idx]) radios[idx].checked = true;
+  choose(first);
+}
+
+const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const list = s => s.split(",").map(x => x.trim()).filter(Boolean);
+
+// SKILL.md from the form. Values are JSON-quoted (valid YAML); the `loadout:`
+// keys follow schemas/item-block.schema.json.
+function skillText(f) {
+  const q = JSON.stringify;
+  const lines = ["---", `name: ${f.name}`, `description: ${q(f.description)}`];
+  const g = [];
+  if (f.mode) g.push(`  mode: ${f.mode}`);
+  if (f.tags.length) g.push(`  tags: ${q(f.tags)}`);
+  if (f.roles.length) g.push("  applies_to:", `    role: ${q(f.roles)}`);
+  if (f.locked) g.push("  locked: true");
+  if (f.author) g.push(`  author: ${q(f.author)}`);
+  if (f.co_authors.length) g.push(`  co_authors: ${q(f.co_authors)}`);
+  if (g.length) lines.push("loadout:", ...g);
+  lines.push("---", "", f.body.trim() || `# ${f.name || "Skill"}\n\nThe steps the agent should follow.`, "");
+  return lines.join("\n");
+}
+
+function newSkill(sources, source) {
+  const into = el("select", { "aria-label": "Source" }, srcOptions(sources, source));
+  const name = el("input", { type: "text", placeholder: "write-spec", "aria-label": "Name" });
+  const desc = el("textarea", { style: "min-height:64px", placeholder: "Write a feature spec in our format. Use when asked for a spec, PRD or design doc.", "aria-label": "Description" });
+  const mode = el("select", { "aria-label": "Mode" },
+    [["", "source default"], ["default-on", "default-on: installed, can be turned off"], ["default-off", "default-off: people opt in"], ["required", "required: can't be turned off"]]
+      .map(([v, l]) => el("option", { value: v }, l)));
+  const tags = el("input", { type: "text", placeholder: "specs, writing", "aria-label": "Tags" });
+  const roles = el("input", { type: "text", placeholder: "developer, product-manager (empty: everyone)", "aria-label": "Roles" });
+  const locked = el("input", { type: "checkbox", "aria-label": "Locked" });
+  const author = el("input", { type: "text", placeholder: "Who wrote it", "aria-label": "Author" });
+  const coAuthors = el("input", { type: "text", placeholder: "Others who helped, separated by commas", "aria-label": "Co-authors" });
+  me().then(n => { if (n && !author.value) { author.value = n; update(); } });
+  const body = el("textarea", { style: "min-height:160px", placeholder: "# Writing a spec\n\n1. …", "aria-label": "Instructions" });
+  const preview = el("pre", { class: "mono", style: "white-space:pre-wrap;background:var(--sunken);padding:10px;border-radius:7px;font-size:12px;max-height:240px;overflow:auto" });
+  const problems = el("div", { class: "warn" });
+  const result = el("div");
+  const form = () => ({ name: name.value.trim(), description: desc.value.trim().replace(/\s+/g, " "), mode: mode.value, tags: list(tags.value), roles: list(roles.value), locked: locked.checked,
+    author: author.value.trim(), co_authors: list(coAuthors.value), body: body.value });
+  const check = f => [
+    !KEBAB.test(f.name) && "Name: lowercase letters, digits and single '-' (e.g. write-spec).",
+    !f.description && "Description: say what the skill does and when to use it.",
+    f.description && !/\buse (it )?(when|for|to)\b/i.test(f.description) && "Tip: end the description with \"Use when …\" so agents know when to load it.",
+    f.tags.some(t => !KEBAB.test(t)) && "Tags: kebab-case words.",
+  ].filter(Boolean);
+  const update = () => { const f = form(); preview.textContent = skillText(f); problems.replaceChildren(...check(f).map(p => el("div", {}, p))); };
+  for (const i of [name, desc, mode, tags, roles, locked, author, coAuthors, body]) i.oninput = i.onchange = update;
+  const create = async () => {
+    const f = form();
+    const bad = check(f).filter(p => !p.startsWith("Tip"));
+    if (bad.length) { toast(bad.join("\n"), true); return; }
+    const key = "skill/" + f.name;
+    try {
+      const existing = await api(`/api/source-item?source=${encodeURIComponent(into.value)}&key=${encodeURIComponent(key)}`);
+      if (existing.text) { toast(`${into.value} already has ${key}; load it in the editor instead`, true); return; }
+      const r = await api("/api/source-item", { source: into.value, key, text: skillText(f) });
+      result.replaceChildren(createdCard(into.value, key, r.path));
+    } catch (e) { toast(e.message, true); }
+  };
+  update();
+  openDrawer(el("h2", {}, "New skill"),
+    el("p", { class: "muted" }, "A skill is a short description (so the AI knows when to use it) plus the steps to follow. It's saved to your working copy; nothing is shared until a pull request is merged."),
+    el("div", { class: "form-grid" },
+      el("label", {}, "Source"), into,
+      el("label", {}, "Name"), name,
+      el("label", {}, "Description"), desc, el("div", { class: "hint" }, "What it does, then \"Use when …\". Agents load skills based on this."),
+      el("label", {}, "Mode"), mode,
+      el("label", {}, "Tags"), tags,
+      el("label", {}, "Only for roles"), roles,
+      el("label", {}, "Locked"), el("label", { class: "row muted" }, locked, "Lower layers can't turn it off or replace it"),
+      el("label", {}, "Author"), el("div", { class: "row nowrap" }, author, meButton(author)),
+      el("label", {}, "Co-authors"), el("div", { class: "row nowrap" }, coAuthors, meButton(coAuthors, true)),
+      el("label", {}, "Instructions"), body),
+    problems,
+    el("h3", { style: "margin-top:14px" }, "SKILL.md"), preview,
+    el("div", { class: "row", style: "margin-top:14px" }, el("button", { class: "btn primary", onclick: create }, "Create skill")), result);
+}
+
+async function adoptSkills(sources, source) {
+  const into = el("select", { "aria-label": "Destination source" }, sources.map(s => el("option", { value: s.name, selected: s.name === source }, s.name)));
+  const folder = el("input", { type: "text", class: "grow", placeholder: "Your AI tools' skills folders, or a folder like ~/work/repo/.claude/skills", "aria-label": "Folder" });
+  const found = el("div");
+  const result = el("div");
+  let boxes = [];
+  const look = async () => {
+    try {
+      const r = await api("/api/adopt" + (folder.value.trim() ? "?path=" + encodeURIComponent(folder.value.trim()) : ""));
+      boxes = [];
+      found.replaceChildren(r.candidates.length ? el("div", {}, r.candidates.map(c => {
+        const box = el("input", { type: "checkbox", disabled: !!c.problem, "aria-label": c.name });
+        if (!c.problem) boxes.push([box, c.name]);
+        return el("label", { style: "display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)" }, box,
+          el("div", { style: "min-width:0" },
+            el("div", {}, el("span", { class: "mono" }, c.name), " ", el("span", { class: "pill" }, c.found_in)),
+            c.description ? el("div", { class: "muted" }, c.description) : null,
+            el("div", { class: c.problem ? "warn" : "mono muted", style: "font-size:11.5px;overflow-wrap:anywhere" }, c.problem || c.path)));
+      })) : el("p", { class: "muted" }, "No skills found that Loadout doesn't already manage."));
+    } catch (e) { toast(e.message, true); }
+  };
+  const adopt = async () => {
+    const skills = boxes.filter(([b]) => b.checked).map(([, n]) => n);
+    if (!skills.length) { toast("Select at least one skill", true); return; }
+    try {
+      const r = await api("/api/adopt", { into: into.value, skills, path: folder.value.trim() });
+      result.replaceChildren(
+        ...r.adopted.map(a => createdCard(r.source, "skill/" + a.name, a.path)),
+        ...r.skipped.map(s => el("div", { class: "warn" }, `Skipped ${s.name}: ${s.reason}`)),
+        r.adopted.length ? el("p", { class: "muted" }, "Once the source ships them, move your originals aside so the next sync installs the shared versions.") : null);
+      await look();
+    } catch (e) { toast(e.message, true); }
+  };
+  openDrawer(el("h2", {}, "Share skills you already have"),
+    el("p", { class: "muted" }, "Skills in your AI tools that Loadout didn't install (or in a folder you name). Adding them copies them into a source's working copy, so you can share them through a pull request."),
+    el("div", { class: "row" }, folder, el("button", { class: "btn", onclick: look }, "Look")),
+    found,
+    el("div", { class: "row", style: "margin-top:14px" }, "Add to source", into, el("button", { class: "btn primary", onclick: adopt }, "Add selected to source")),
+    result);
+  await look();
+}
+
+// Ready-made templates for the New template form. The first mirrors
+// examples/eng-skills/templates/pr-workflow.
+const STARTERS = [
+  { label: "Team pull request workflow", name: "pr-workflow",
+    about: "A pull request workflow skill. Each team fills in its own conventions and owns the result.",
+    description: "How {{team}} works with pull requests. Use when opening, reviewing or merging a PR in {{team}}'s repos.",
+    tags: "git, pull-requests",
+    vars: [{ name: "team", description: "Your squad or team, e.g. Checkout" }, { name: "reviewers", description: "Approvals needed before merging", default: "2" }, { name: "branch_prefix", description: "Branch naming prefix", default: "feature/" }],
+    body: "# Pull requests in {{team}}\n\n1. Branch from `main` as `{{branch_prefix}}<ticket>-<short-name>`.\n2. Keep PRs small enough to review in one sitting; link the ticket.\n3. Fill in the PR template: what changed, why, how it was tested.\n4. Approvals required before merging: {{reviewers}} (at least one from {{team}}).\n5. Squash-merge once CI is green. Never merge your own PR without review.\n" },
+  { label: "On-call runbook", name: "oncall-runbook",
+    about: "What to do when paged. Each team adds its own channels, dashboards and escalation.",
+    description: "{{team}}'s on-call runbook. Use when handling an alert, an incident or a page for {{team}}'s services.",
+    tags: "on-call, incidents",
+    vars: [{ name: "team", description: "The team that's on call" }, { name: "channel", description: "Where incidents are discussed", default: "#incidents" }, { name: "dashboard", description: "Link to the main dashboard" }, { name: "escalate_after", description: "Minutes before escalating", default: "30" }],
+    body: "# {{team}} on-call\n\n1. Acknowledge the page and post in {{channel}}.\n2. Check the dashboard: {{dashboard}}.\n3. Mitigate first (roll back, scale up, turn off the feature flag), investigate later.\n4. No progress after {{escalate_after}} minutes? Escalate to the secondary on-call.\n5. Afterwards, write a short incident summary.\n" },
+  { label: "Code review checklist", name: "review-checklist",
+    about: "A code review checklist each team tailors to its language and standards.",
+    description: "Code review checklist for {{team}}'s {{language}} code. Use when reviewing a pull request or asked to check code before merging.",
+    tags: "code-review",
+    vars: [{ name: "team", description: "Your team" }, { name: "language", description: "Main language, e.g. Go or TypeScript" }, { name: "style_guide", description: "Link to your style guide", default: "the team style guide" }],
+    body: "# Reviewing {{language}} code in {{team}}\n\n- Does it follow {{style_guide}}?\n- Are there tests for the change, including the unhappy paths?\n- Are errors handled and logged, with no secrets in logs?\n- Is anything user-visible behind a flag or documented?\n- Would you understand this code in six months?\n" },
+];
+
+const PLACEHOLDER = /\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}/g;
+const VARNAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+const placeholdersIn = text => new Set([...text.matchAll(PLACEHOLDER)].map(m => m[1]));
+
+// A template's SKILL.md from the form. Values are JSON-quoted.
+function templateText(f) {
+  const q = JSON.stringify;
+  const lines = ["---", `name: ${f.name}`, `description: ${q(f.description)}`, "template:"];
+  if (f.about) lines.push(`  description: ${q(f.about)}`);
+  if (f.vars.length) {
+    lines.push("  variables:");
+    for (const v of f.vars) lines.push(`    - { name: ${v.name}` + (v.description ? `, description: ${q(v.description)}` : "") + (v.default !== undefined ? `, default: ${q(v.default)}` : "") + " }");
+  }
+  if (!f.about && !f.vars.length) lines[lines.length - 1] = "template: {}";
+  if (f.tags.length) lines.push("loadout:", `  tags: ${q(f.tags)}`);
+  lines.push("---", "", f.body.trim() || `# ${f.name || "Template"}\n\nThe steps the agent should follow.`, "");
+  return lines.join("\n");
+}
+
+function newTemplate(sources, start) {
+  const into = el("select", { "aria-label": "Source" }, srcOptions(sources));
+  const name = el("input", { type: "text", placeholder: "oncall-runbook", "aria-label": "Template name" });
+  const about = el("input", { type: "text", placeholder: "What to do when paged. Each team adds its own channels.", "aria-label": "What the template is for" });
+  const desc = el("textarea", { style: "min-height:56px", placeholder: "{{team}}'s on-call runbook. Use when handling an alert for {{team}}'s services.", "aria-label": "Skill description" });
+  const tags = el("input", { type: "text", placeholder: "on-call, incidents", "aria-label": "Tags" });
+  const body = el("textarea", { style: "min-height:200px", placeholder: "# {{team}} on-call\n\n1. …", "aria-label": "Instructions" });
+  const varsBox = el("div");
+  const inserts = el("div", { class: "row" });
+  const problems = el("div");
+  const preview = el("pre", { style: "max-height:300px;overflow:auto" });
+  const result = el("div");
+  let vars = [];
+  let lastText = body;
+  let mode = "filled";
+  for (const t of [desc, body]) t.addEventListener("focus", () => (lastText = t));
+
+  const form = () => ({ name: name.value.trim(), about: about.value.trim(), description: desc.value.trim().replace(/\s+/g, " "), tags: list(tags.value), body: body.value,
+    vars: vars.map(v => ({ name: v.name.trim(), description: v.description.trim() || undefined, default: v.optional ? v.default : undefined })) });
+  const check = f => {
+    const used = placeholdersIn(f.description + "\n" + f.body);
+    const declared = f.vars.map(v => v.name);
+    return [
+      !KEBAB.test(f.name) && "Template name: lowercase letters, digits and single '-' (e.g. oncall-runbook).",
+      !f.description && "Skill description: say what the finished skill does and when to use it.",
+      ...f.vars.filter(v => !VARNAME.test(v.name)).map(v => `Blank "${v.name}": start with a letter; letters, digits, _ and - only.`),
+      ...declared.filter((n, i) => declared.indexOf(n) !== i).map(n => `Blank "${n}" is listed twice.`),
+      ...[...used].filter(n => !declared.includes(n)).map(n => `{{${n}}} is used but isn't in the list of blanks. Add it below.`),
+      f.tags.some(t => !KEBAB.test(t)) && "Tags: kebab-case words.",
+    ].filter(Boolean).concat(declared.filter(n => VARNAME.test(n) && !used.has(n)).map(n => `Tip: the blank "${n}" isn't used in the text yet.`));
+  };
+  const example = f => { const vals = {}; for (const v of f.vars) vals[v.name] = v.default ?? `‹${v.name}›`; return vals; };
+  const update = () => {
+    const f = form();
+    const text = templateText(f);
+    preview.textContent = mode === "file" ? text : text.replace(PLACEHOLDER, (m, n) => { const e = example(f); return n in e ? e[n] : m; }).replace(/\ntemplate:[\s\S]*?\n(?=[a-z]|---)/, "\n");
+    problems.replaceChildren(...check(f).map(p => el("div", { class: p.startsWith("Tip") ? "muted" : "warn" }, p)));
+    inserts.replaceChildren(el("span", { class: "muted" }, "Insert a blank:"), ...f.vars.filter(v => VARNAME.test(v.name)).map(v =>
+      el("button", { class: "btn", type: "button", onclick: () => insertAt(lastText, `{{${v.name}}}`) }, `{{${v.name}}}`)));
+  };
+  const insertAt = (t, s) => { const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a; t.value = t.value.slice(0, a) + s + t.value.slice(b); t.focus(); t.selectionStart = t.selectionEnd = a + s.length; update(); };
+  const renderVars = () => {
+    varsBox.replaceChildren(...vars.map((v, i) => {
+      const n = el("input", { type: "text", value: v.name, placeholder: "team", "aria-label": "Blank name", style: "width:130px" });
+      const d = el("input", { type: "text", value: v.description, placeholder: "The question people see, e.g. Your team's name", "aria-label": "Question", class: "grow" });
+      const opt = el("input", { type: "checkbox", checked: v.optional, "aria-label": "Has a default" });
+      const def = el("input", { type: "text", value: v.default, placeholder: v.optional ? "" : "required", "aria-label": "Default", style: "width:110px", disabled: !v.optional });
+      n.oninput = () => { v.name = n.value; update(); };
+      d.oninput = () => { v.description = d.value; update(); };
+      opt.onchange = () => { v.optional = opt.checked; def.disabled = !opt.checked; def.placeholder = opt.checked ? "" : "required"; update(); };
+      def.oninput = () => { v.default = def.value; update(); };
+      return el("div", { class: "row var-row" }, n, d, el("label", { class: "row muted", title: "Without a default, people must fill it in" }, opt, "default"), def,
+        el("button", { class: "btn ghost", type: "button", "aria-label": "Remove", onclick: () => { vars.splice(i, 1); renderVars(); } }, "✕"));
+    }), el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => { vars.push({ name: "", description: "", optional: false, default: "" }); renderVars(); } }, "+ Add a blank")));
+    update();
+  };
+  const fill = t => {
+    name.value = t.name || ""; about.value = t.about || ""; desc.value = t.description || ""; tags.value = t.tags || ""; body.value = t.body || "";
+    vars = (t.vars || []).map(v => ({ name: v.name, description: v.description || "", optional: v.default !== undefined, default: v.default ?? "" }));
+    renderVars();
+  };
+  // Start from a skill in one of your sources: its text becomes the body.
+  const fromSrc = el("select", { "aria-label": "Source of the skill" }, sources.map(s => el("option", { value: s.name }, s.name)));
+  const fromSkill = el("input", { type: "text", placeholder: "write-spec", "aria-label": "Skill name", style: "width:160px" });
+  const loadSkill = async () => {
+    try {
+      const r = await api(`/api/source-item?source=${encodeURIComponent(fromSrc.value)}&key=${encodeURIComponent("skill/" + fromSkill.value.trim())}`);
+      if (!r.text) { toast(`${fromSrc.value} has no skill named ${fromSkill.value.trim()}`, true); return; }
+      const m = r.text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+      const d = m && m[1].match(/^description:\s*(.*)$/m);
+      let dv = d ? d[1].trim() : "";
+      if (/^["']/.test(dv)) { try { dv = JSON.parse(dv.replace(/^'(.*)'$/, (_, x) => JSON.stringify(x.replace(/''/g, "'")))); } catch (_) {} }
+      fill({ name: fromSkill.value.trim() + "-template", description: dv, body: m ? m[2] : r.text, vars: [] });
+      toast("Loaded. Now replace the team-specific parts with blanks like {{team}}.");
+    } catch (e) { toast(e.message, true); }
+  };
+  const starters = el("div", { class: "row" }, el("span", { class: "muted" }, "Start from:"),
+    el("button", { class: "btn", type: "button", onclick: () => fill({}) }, "Blank"),
+    STARTERS.map(t => el("button", { class: "btn", type: "button", onclick: () => fill(t) }, t.label)));
+  const create = async () => {
+    const f = form();
+    const bad = check(f).filter(p => !p.startsWith("Tip"));
+    if (bad.length) { toast(bad.join("\n"), true); return; }
+    try {
+      const r = await api("/api/source-template", { source: into.value, name: f.name, text: templateText(f), create: true });
+      const msg = el("input", { type: "text", class: "grow", value: `Add the ${f.name} template`, "aria-label": "Pull request title" });
+      result.replaceChildren(el("div", { class: "card", style: "margin-top:14px" },
+        el("div", { class: "ok" }, `Saved template ${f.name} in your working copy of ${into.value}`), el("div", { class: "mono muted" }, r.path),
+        (r.warnings || []).map(w => el("div", { class: "muted" }, w)),
+        el("p", { class: "muted" }, "Next, open a pull request. Once it's merged and people sync, the template appears on their Templates page."),
+        el("div", { class: "row" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(into.value, msg.value) }, "Open pull request"))));
+    } catch (e) { toast(e.message, true); }
+  };
+  for (const i of [name, about, desc, tags, body]) i.oninput = update;
+  const modeBtn = (m, label) => el("button", { class: "btn" + (mode === m ? " primary" : ""), type: "button", onclick: e => { mode = m; for (const b of e.target.parentNode.querySelectorAll("button")) b.classList.toggle("primary", b === e.target); update(); } }, label);
+  fill(start || {});
+  if (start && start.into) into.value = start.into;
+  openDrawer(el("h2", {}, "New template"),
+    el("p", { class: "muted" }, "A template is a skill with blanks. Other teams pick it on the Templates page, answer a few questions, and get their own copy. Write it like a normal skill, and put ", el("code", {}, "{{name}}"), " wherever a team's own answer should go."),
+    starters,
+    el("div", { class: "row" }, el("span", { class: "muted" }, "…or a skill you have:"), fromSrc, fromSkill, el("button", { class: "btn", type: "button", onclick: loadSkill }, "Load")),
+    el("h3", {}, "1. About the template"),
+    el("div", { class: "form-grid" },
+      el("label", {}, "Save in source"), into,
+      el("label", {}, "Template name"), name,
+      el("label", {}, "What it's for"), about, el("div", { class: "hint" }, "Shown to people choosing a template."),
+      el("label", {}, "Tags"), tags),
+    el("h3", {}, "2. The blanks people fill in"),
+    el("p", { class: "muted", style: "margin-top:0" }, "Each blank becomes a question. Give it a default if most teams can keep it."),
+    varsBox,
+    el("h3", {}, "3. The skill"),
+    el("div", { class: "form-grid" },
+      el("label", {}, "Skill description"), desc, el("div", { class: "hint" }, "What the finished skill does, then \"Use when …\". Blanks are allowed here too."),
+      el("label", {}, "Instructions"), body),
+    inserts,
+    problems,
+    el("div", { class: "row", style: "margin-top:14px" }, el("h3", { style: "margin:0" }, "Preview"), el("span", { class: "grow" }),
+      el("div", { class: "row" }, modeBtn("filled", "With example answers"), modeBtn("file", "SKILL.md file"))),
+    preview,
+    el("div", { class: "row", style: "margin-top:14px" }, el("button", { class: "btn primary", onclick: create }, "Save template")), result);
+  document.getElementById("drawer").classList.add("wide");
+}
+
+function useTemplate(t, sources) {
+  const inputs = {};
+  const name = el("input", { type: "text", value: t.name, "aria-label": "Skill name" });
+  const into = el("select", { "aria-label": "Destination source" }, srcOptions(sources.filter(s => s.name !== t.source).concat(sources.filter(s => s.name === t.source))));
+  const result = el("div");
+  const fields = t.variables.map(v => {
+    inputs[v.name] = el("input", { type: "text", value: v.default ?? "", placeholder: v.default === undefined ? "required" : "", "aria-label": v.name });
+    return [el("label", { class: "mono" }, v.name), inputs[v.name], v.description ? el("div", { class: "hint" }, v.description) : null];
+  });
+  const create = async () => {
+    const values = {};
+    for (const [k, i] of Object.entries(inputs)) values[k] = i.value;
+    const missing = t.variables.filter(v => v.default === undefined && !values[v.name].trim()).map(v => v.name);
+    if (missing.length) { toast("Fill in: " + missing.join(", "), true); return; }
+    try {
+      const r = await api("/api/template-use", { template: t.id, into: into.value, name: name.value, values });
+      const msg = el("input", { type: "text", class: "grow", value: `Add ${name.value} from ${t.name} template`, "aria-label": "Pull request title" });
+      result.replaceChildren(el("div", { class: "card", style: "margin-top:14px" },
+        el("div", { class: "ok" }, `Created ${r.id}`), el("div", { class: "mono muted" }, r.path),
+        (r.warnings || []).map(w => el("div", { class: "warn" }, w)),
+        el("div", { class: "row", style: "margin-top:10px" }, el("button", { class: "btn", onclick: () => editItem(r.source, "skill/" + name.value) }, "Review in editor")),
+        el("div", { class: "row" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(r.source, msg.value) }, "Open pull request"))));
+    } catch (e) { toast(e.message, true); }
+  };
+  openDrawer(el("h2", {}, "Use the ", el("code", {}, t.name), " template"),
+    el("p", { class: "muted" }, "Answer the questions below. You get your own copy of the skill, with your answers filled in, which you can edit before sharing."),
+    t.description ? el("p", { class: "muted" }, t.description) : null,
+    el("div", { class: "form-grid" }, fields, el("label", {}, "Skill name"), name, el("label", {}, "Add to source"), into,
+      el("div", { class: "hint" }, "Saved to your working copy of that source. Nothing is shared until you open a pull request.")),
+    el("div", { class: "row", style: "margin-top:14px" }, el("button", { class: "btn primary", onclick: create }, "Create skill")), result);
+}
+
+async function show(tab, opts, keepScroll) {
+  current = tab;
+  if (location.hash !== "#" + tab) history.pushState(null, "", "#" + tab);
+  closeDrawer();
+  renderNav();
+  const m = document.getElementById("main");
+  const y = window.scrollY;
+  if (!keepScroll) m.replaceChildren(el("div", { class: "muted" }, "Loading…"));
+  const frag = el("div");
+  try { await views[tab](frag, opts); m.replaceChildren(frag); }
+  catch (e) { m.replaceChildren(el("div", { class: "card bad" }, e.message)); }
+  if (keepScroll) window.scrollTo(0, y);
+  refreshStatus();
+}
+function renderNav() {
+  const nav = document.getElementById("nav");
+  let group = null;
+  nav.replaceChildren(...tabs.flatMap(([t, label, g, hint]) => [
+    g !== group && (group = g) ? el("div", { class: "nav-group" }, g) : null,
+    el("button", { class: t === current ? "on" : "", title: hint, "aria-current": t === current ? "page" : null, onclick: () => show(t) },
+      label, t === "Review" && pendingCount ? el("span", { class: "count" }, pendingCount) : null)]).filter(Boolean));
+}
+async function refreshStatus() {
+  try {
+    const st = await api("/api/status");
+    document.getElementById("fp").textContent = st.fingerprint || "";
+    document.getElementById("last-sync").textContent = "Last updated: " + ago(st.last_sync);
+    if (pendingCount !== st.pending.length) { pendingCount = st.pending.length; renderNav(); }
+  } catch (_) {}
+}
+const fromHash = () => { const t = decodeURIComponent(location.hash.slice(1)); return tabs.some(([n]) => n === t) ? t : null; };
+window.addEventListener("hashchange", () => { const t = fromHash() || "Overview"; if (t !== current) show(t); });
+// First visit: people who haven't finished setting up land on Start here.
+(async () => {
+  let first = fromHash();
+  if (!first) {
+    try { const st = await api("/api/status"); first = st.sources && st.enabled_items ? "Overview" : "Start"; }
+    catch (_) { first = "Start"; }
+  }
+  show(first);
+})();
+</script>
+</body>
+</html>

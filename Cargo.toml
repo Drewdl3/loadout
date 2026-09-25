@@ -1,0 +1,69 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "MIT"
+repository = "https://github.com/Drewdl3/loadout"
+authors = ["Loadout contributors"]
+
+[workspace.dependencies]
+loadout-model = { path = "crates/loadout-model", version = "0.1.0" }
+loadout-core = { path = "crates/loadout-core", version = "0.1.0" }
+loadout-git = { path = "crates/loadout-git", version = "0.1.0" }
+loadout-members = { path = "crates/loadout-members", version = "0.1.0" }
+loadout-targets = { path = "crates/loadout-targets", version = "0.1.0" }
+loadout-secrets = { path = "crates/loadout-secrets", version = "0.1.0" }
+loadout-audit = { path = "crates/loadout-audit", version = "0.1.0" }
+loadout-search = { path = "crates/loadout-search", version = "0.1.0" }
+loadout-code = { path = "crates/loadout-code", version = "0.1.0" }
+
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde-saphyr = "1"
+toml = "1"
+toml_edit = "0.25"
+clap = { version = "4", features = ["derive"] }
+dialoguer = { version = "0.12", default-features = false, features = ["password"] }
+thiserror = "2"
+tempfile = "3"
+junction = "2"
+directories = "6"
+blake3 = "1"
+schemars = "1"
+regex = "1"
+ciborium = "0.2"
+ruzstd = "0.9"
+data-encoding = "2"
+qrcode = { version = "0.14", default-features = false }
+nucleo-matcher = "0.3"
+tiny_http = "0.12"
+ratatui = "0.30"
+getrandom = "0.3"
+sha2 = "0.11"
+secrecy = "0.10"
+keyring = "4"
+ureq = "3"
+insta = { version = "1", features = ["filters", "json"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+assert_cmd = "2"
+predicates = "3"
+proptest = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

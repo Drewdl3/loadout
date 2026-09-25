@@ -1,0 +1,63 @@
+---
+source: crates/loadout-cli/tests/targets.rs
+expression: configs
+---
+== .claude.json
+{
+  "mcpServers": {
+    "docs": {
+      "type": "stdio",
+      "command": "acme-docs-mcp",
+      "args": [
+        "--stdio"
+      ]
+    }
+  }
+}
+
+== .codex/config.toml
+model = "gpt-5" # mine
+
+[mcp_servers.docs]
+command = "acme-docs-mcp"
+args = ["--stdio"]
+
+== .cursor/mcp.json
+{
+  "mcpServers": {
+    "docs": {
+      "type": "stdio",
+      "command": "acme-docs-mcp",
+      "args": [
+        "--stdio"
+      ]
+    }
+  }
+}
+
+== .config/opencode/opencode.json
+{
+  "theme": "dark",
+  "mcp": {
+    "docs": {
+      "type": "local",
+      "command": [
+        "acme-docs-mcp",
+        "--stdio"
+      ],
+      "enabled": true
+    }
+  }
+}
+
+== .pi/agent/mcp.json
+{
+  "mcpServers": {
+    "docs": {
+      "command": "acme-docs-mcp",
+      "args": [
+        "--stdio"
+      ]
+    }
+  }
+}

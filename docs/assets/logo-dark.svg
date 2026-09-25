@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="300" height="80" role="img" aria-label="Loadout">
+  <g transform="translate(4 8)">
+  <path d="M32 3 L56 11 V29 C56 44.5 45.5 55.5 32 61 C18.5 55.5 8 44.5 8 29 V11 Z" fill="#2b5a8a"/>
+  <path d="M32 3 L56 11 V29 C56 44.5 45.5 55.5 32 61 Z" fill="#244c75"/>
+  <path d="M32 16 L47 23.5 L32 31 L17 23.5 Z" fill="#ffffff"/>
+  <path d="M17 30.5 L32 38 L47 30.5" fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17 37.5 L32 45 L47 37.5" fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="80" y="52" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="36" font-weight="700" fill="#e8edf3" letter-spacing="-0.5">Load<tspan fill="#5b9bd8">out</tspan></text>
+</svg>

@@ -1,0 +1,5 @@
+---
+source: crates/loadout-cli/tests/sync.rs
+expression: out.stderr
+---
+warning: claude-code: ~/.claude/skills/write-spec already exists and is not managed by Loadout; skipped skill/write-spec

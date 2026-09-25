@@ -1,0 +1,6 @@
+---
+source: crates/loadout-cli/tests/sync.rs
+expression: out.stdout
+---
+Subscribed to [ROOT]/remotes/team-skills.
+Run `lo sync` to install its items.

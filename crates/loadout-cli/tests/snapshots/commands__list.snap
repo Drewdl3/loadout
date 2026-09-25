@@ -1,0 +1,6 @@
+---
+source: crates/loadout-cli/tests/commands.rs
+expression: out.stdout
+---
+off  team-skills:skill/opt-in      Optional helper.
+on   team-skills:skill/write-spec  Write a spec.

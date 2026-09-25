@@ -1,0 +1,21 @@
+# Pi. MCP needs the
+# pi-mcp-adapter extension.
+id = "pi"
+display = "Pi"
+detect = ["~/.pi"]
+
+[skills]
+path = "~/.pi/agent/skills"
+project = ".pi/skills"
+layout = "dir-per-item"
+
+[extras.prompts]
+path = "~/.pi/agent/prompts"
+project = ".pi/prompts"
+transform = "none"
+
+[mcp]
+renderer = "pi-mcp-json"
+path = "~/.pi/agent/mcp.json"
+project = ".pi/mcp.json"
+key = "mcpServers"

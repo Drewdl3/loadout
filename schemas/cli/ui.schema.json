@@ -1,0 +1,23 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/ui.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UiStarted",
+  "description": "Printed once the server listens (`--json`: one line).",
+  "type": "object",
+  "properties": {
+    "url": {
+      "description": "Open this URL (it carries the per-run token).",
+      "type": "string"
+    },
+    "port": {
+      "type": "integer",
+      "format": "uint16",
+      "minimum": 0,
+      "maximum": 65535
+    }
+  },
+  "required": [
+    "url",
+    "port"
+  ]
+}

@@ -1,0 +1,16 @@
+# Codex. Personal skills
+# live in the shared ~/.agents/skills.
+id = "codex"
+display = "Codex"
+detect = ["~/.codex"]
+
+[skills]
+path = "~/.agents/skills"
+project = ".agents/skills"
+layout = "dir-per-item"
+
+[mcp]
+renderer = "codex-toml"
+path = "~/.codex/config.toml"
+project = ".codex/config.toml"
+key = "mcp_servers"

@@ -1,0 +1,25 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/init-project.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectInitReport",
+  "description": "`--json` output of `lo init --project`.",
+  "type": "object",
+  "properties": {
+    "root": {
+      "description": "The repo root.",
+      "type": "string"
+    },
+    "group": {
+      "description": "The project's group (items rank as layer `project`).",
+      "type": "string"
+    },
+    "config": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "root",
+    "group",
+    "config"
+  ]
+}

@@ -1,0 +1,37 @@
+---
+source: crates/loadout-cli/tests/mcp.rs
+expression: cfg
+---
+{
+  "numStartups": 7,
+  "mcpServers": {
+    "mine": {
+      "type": "stdio",
+      "command": "my-server"
+    },
+    "docs": {
+      "type": "http",
+      "url": "https://mcp.example.com/docs",
+      "headers": {
+        "X-Team": "payments"
+      },
+      "headersHelper": "[LOADOUT] mcp-headers team-skills:mcp/docs"
+    },
+    "jira": {
+      "type": "stdio",
+      "command": "[LOADOUT]",
+      "args": [
+        "mcp-run",
+        "team-skills:mcp/jira"
+      ]
+    },
+    "plain": {
+      "type": "stdio",
+      "command": "acme-plain-mcp",
+      "args": [
+        "--stdio"
+      ]
+    }
+  },
+  "projects": {}
+}

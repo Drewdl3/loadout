@@ -1,0 +1,5 @@
+---
+source: crates/loadout-cli/tests/layers.rs
+expression: out.stderr
+---
+warning: payments:skill/security cannot override skill/security: acme-company:skill/security is locked or not overridable

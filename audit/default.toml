@@ -1,0 +1,272 @@
+# Built-in content-audit rules.
+#
+# Adapted from runkids/skillshare internal/audit/rules.yaml (MIT,
+# Copyright (c) 2025 runkids, commit 4541cb5); see THIRD_PARTY_NOTICES.md.
+# Changes: TOML instead of YAML; severities mapped to info/warn/high/critical
+# (committed secrets are critical); a subset of the
+# rules; some messages reworded.
+#
+# Fields: id, severity (info|warn|high|critical), category, message, regex
+# (Rust regex syntax, matched per line), optional exclude (a matching line is
+# ignored), optional kinds (skill, mcp, agent, plugin, extra; default all),
+# optional secret = true (the match is redacted in reports), optional
+# enabled = false (a company config's rules file can switch a built-in rule off by
+# repeating its id).
+#
+# Static audit is a speed bump, not a guarantee: review policy and pinning
+# are the real controls.
+
+# ── Prompt injection ──
+[[rule]]
+id = "prompt-injection-0"
+severity = "critical"
+category = "prompt-injection"
+message = "Prompt injection attempt"
+regex = '(?i)(ignore\s+(all\s+)?previous\s+instructions|disregard\s+(all\s+)?rules|forget\s+everything|override\s+safety)'
+
+[[rule]]
+id = "prompt-injection-1"
+severity = "critical"
+category = "prompt-injection"
+message = "SYSTEM:/OVERRIDE: style prompt override"
+regex = '(?m)^\s*(SYSTEM|OVERRIDE|IGNORE|ADMIN|ROOT):'
+
+[[rule]]
+id = "prompt-injection-2"
+severity = "high"
+category = "prompt-injection"
+message = "Agent directive tag"
+regex = '(?i)</?(system|instructions|override|prompt)\b[^>]*>'
+
+[[rule]]
+id = "prompt-injection-3"
+severity = "critical"
+category = "prompt-injection"
+message = "Jailbreak-style directive"
+regex = '(?im)^\s*(DEV(ELOPER)?[\s_]*MODE|JAILBREAK|DAN[\s_.]*MODE)\b'
+
+[[rule]]
+id = "prompt-injection-4"
+severity = "critical"
+category = "prompt-injection"
+message = "Instruction to hide actions from the user"
+regex = '''(?i)(don't\s+tell\s+the\s+user|do\s+not\s+tell\s+the\s+user|do\s+not\s+(mention|reveal)\s+this\s+(instruction|change|action|to\s+the\s+user)|never\s+(mention|reveal)\s+this\s+instruction|hide\s+this\s+from\s+the\s+user)'''
+
+[[rule]]
+id = "hidden-comment-injection-0"
+severity = "high"
+category = "prompt-injection"
+message = "Prompt injection hidden in an HTML comment"
+regex = '(?i)<!--.*?(ignore\s+(all\s+)?previous|disregard|you\s+are\s+now|forget\s+everything|override\s+safety|SYSTEM:)'
+
+[[rule]]
+id = "self-propagation-0"
+severity = "high"
+category = "prompt-injection"
+message = "Self-replication instruction"
+regex = '(?i)(add|inject|insert|include)\s+(this|these)\s+(instruction|rule|directive|text)\s+(to|into|in)\s+(all|every|each|other)\b'
+
+[[rule]]
+id = "config-manipulation-0"
+severity = "high"
+category = "prompt-injection"
+message = "Instruction to modify agent configuration or memory files"
+regex = '(?i)\b(write|modify|edit|update|append|add|insert|inject)\b.{0,20}(MEMORY\.md|CLAUDE\.md|AGENTS\.md|\.cursorrules|\.windsurfrules|\.clinerules)\b'
+
+# ── Hidden text ──
+[[rule]]
+id = "hidden-unicode-0"
+severity = "high"
+category = "hidden-text"
+message = "Zero-width Unicode characters"
+regex = "[​‌‍⁠﻿]"
+
+[[rule]]
+id = "hidden-unicode-1"
+severity = "critical"
+category = "hidden-text"
+message = "Unicode tag characters (invisible payload)"
+regex = '[\x{E0001}-\x{E007F}]'
+
+[[rule]]
+id = "hidden-unicode-2"
+severity = "high"
+category = "hidden-text"
+message = "Bidirectional control characters (Trojan Source)"
+regex = "[‪-‮⁦-⁩]"
+
+[[rule]]
+id = "base64-blob-0"
+severity = "warn"
+category = "obfuscation"
+message = "Long base64 blob; may hide instructions or a payload"
+regex = '[A-Za-z0-9+/]{160,}={0,2}'
+
+[[rule]]
+id = "obfuscation-0"
+severity = "high"
+category = "obfuscation"
+message = "base64 decode piped to a shell may hide malicious content"
+regex = '(?i)(base64\s+(-d|--decode)\b.*\|\s*(sh|bash|zsh|eval)\b|\bbase64\b.*\|\s*(sh|bash|zsh|eval)\b)'
+
+# ── Exfiltration ──
+[[rule]]
+id = "data-exfiltration-0"
+severity = "critical"
+category = "exfiltration"
+message = "Command may send secrets or environment variables to a remote host"
+regex = '(?i)(curl|wget)\s+.*\$\{?(SECRET|TOKEN|API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|AWS_SECRET|GITHUB_TOKEN|HOME|SSH|GPG)'
+
+[[rule]]
+id = "data-exfiltration-1"
+severity = "warn"
+category = "exfiltration"
+message = "External image with query parameters (possible exfiltration channel)"
+regex = '!\[[^\]]*\]\(https?://[^)]*\?[^)]+\)'
+
+[[rule]]
+id = "data-exfiltration-2"
+severity = "high"
+category = "exfiltration"
+message = "Possible DNS exfiltration via an encoded subdomain"
+regex = '(?i)\b(dig|nslookup|host)\b\s+.*(\$[({]|`)'
+
+# ── Dangerous commands (skills and MCP definitions) ──
+[[rule]]
+id = "fetch-with-pipe-0"
+severity = "high"
+category = "remote-code"
+message = "Downloaded content piped to an interpreter (curl | sh)"
+regex = '(?i)\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(ba|z)?sh\b'
+
+[[rule]]
+id = "fetch-with-pipe-1"
+severity = "high"
+category = "remote-code"
+message = "Downloaded content piped to a script interpreter"
+regex = '(?i)\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(python[23]?|node|ruby|perl)\b'
+
+[[rule]]
+id = "destructive-commands-0"
+severity = "high"
+category = "destructive"
+message = "Potentially destructive rm -rf"
+regex = '(?i)\brm\s+-rf\s+(/(\s|$|\*)|\*|~|\$HOME)'
+
+[[rule]]
+id = "destructive-commands-1"
+severity = "high"
+category = "destructive"
+message = "chmod 777"
+regex = '(?i)\bchmod\s+777\b'
+
+[[rule]]
+id = "destructive-commands-2"
+severity = "warn"
+category = "destructive"
+message = "sudo"
+regex = '(?i)\bsudo\s+'
+
+[[rule]]
+id = "destructive-commands-3"
+severity = "high"
+category = "destructive"
+message = "Disk overwrite or format command"
+regex = '(?i)(\bdd\s+if=|\bmkfs\.)'
+
+[[rule]]
+id = "untrusted-install-0"
+severity = "warn"
+category = "supply-chain"
+message = "npx -y runs a package without confirmation; pin a version"
+regex = '(?i)\bnpx\s+(-y|--yes)\b'
+exclude = '@\d+\.\d+'
+
+[[rule]]
+id = "untrusted-install-1"
+severity = "warn"
+category = "supply-chain"
+message = "pip install from a URL instead of a registry"
+regex = '(?i)\bpip3?\s+install\s+https?://'
+
+[[rule]]
+id = "ip-address-url-0"
+severity = "warn"
+category = "network"
+message = "URL with a raw IP address"
+regex = 'https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}([:/\s)"]|$)'
+exclude = 'https?://(127\.0\.0\.1|0\.0\.0\.0|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})([:/\s)"]|$)'
+
+# ── Committed secrets (critical: repos must hold references, never values) ──
+[[rule]]
+id = "hardcoded-secret-0"
+severity = "critical"
+category = "secret"
+message = "Google API key"
+regex = 'AIza[0-9A-Za-z\-_]{35}'
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-1"
+severity = "critical"
+category = "secret"
+message = "AWS access key"
+regex = '\bAKIA[0-9A-Z]{16}\b'
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-2"
+severity = "critical"
+category = "secret"
+message = "GitHub token"
+regex = '\b(gh[pousr]_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{22,})'
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-3"
+severity = "critical"
+category = "secret"
+message = "Slack token"
+regex = '\bxox[bporas]-[A-Za-z0-9\-]{10,}'
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-4"
+severity = "critical"
+category = "secret"
+message = "OpenAI or Anthropic API key"
+regex = '\b(sk-[A-Za-z0-9]{20,}T3BlbkFJ[A-Za-z0-9]{20,}|sk-proj-[A-Za-z0-9\-_]{40,}|sk-ant-[A-Za-z0-9\-_]{80,})'
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-5"
+severity = "critical"
+category = "secret"
+message = "Stripe secret or restricted key"
+regex = '\b[sr]k_(live|test)_[A-Za-z0-9]{20,}'
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-6"
+severity = "critical"
+category = "secret"
+message = "Private key block"
+regex = '-----BEGIN ((RSA|DSA|EC|OPENSSH|PGP) )?PRIVATE KEY( BLOCK)?-----'
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-7"
+severity = "critical"
+category = "secret"
+message = "Hard-coded credential assignment (use a secret:// reference)"
+regex = '''(?i)(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|client[_-]?secret)["']?\s*[:=]\s*["'][A-Za-z0-9+/\-_.]{16,}["']'''
+secret = true
+
+[[rule]]
+id = "hardcoded-secret-8"
+severity = "critical"
+category = "secret"
+message = "Bearer token value (use a secret:// reference)"
+regex = '(?i)\bBearer\s+[A-Za-z0-9\-_.=]{20,}'
+exclude = '(?i)Bearer\s+(secret|env|keychain|op|vault|sops)://'
+secret = true

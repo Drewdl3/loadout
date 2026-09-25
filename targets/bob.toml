@@ -1,0 +1,25 @@
+# IBM Bob (IDE and Bob Shell).
+id = "bob"
+display = "IBM Bob"
+detect = ["~/.bob"]
+
+[skills]
+path = "~/.bob/skills"
+project = ".bob/skills"
+layout = "dir-per-item"
+
+[extras.commands]
+path = "~/.bob/commands"
+project = ".bob/commands"
+transform = "none"
+
+[extras.rules]
+path = "~/.bob/rules"
+project = ".bob/rules"
+transform = "none"
+
+[mcp]
+renderer = "bob-json"
+path = "~/.bob/mcp_settings.json"
+project = ".bob/mcp.json"
+key = "mcpServers"

@@ -1,0 +1,25 @@
+# OpenCode.
+id = "opencode"
+display = "OpenCode"
+detect = ["~/.config/opencode"]
+
+[skills]
+path = "~/.config/opencode/skills"
+project = ".opencode/skills"
+layout = "dir-per-item"
+
+[agents]
+path = "~/.config/opencode/agents"
+project = ".opencode/agents"
+layout = "file-per-item"
+
+[extras.commands]
+path = "~/.config/opencode/commands"
+project = ".opencode/commands"
+transform = "none"
+
+[mcp]
+renderer = "opencode-json"
+path = "~/.config/opencode/opencode.json"
+project = "opencode.json"
+key = "mcp"

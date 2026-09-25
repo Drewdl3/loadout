@@ -1,0 +1,11 @@
+---
+source: crates/loadout-cli/tests/examples.rs
+expression: why.stdout
+---
+skill/write-spec — enabled (default)
+winner: payments-skills:skill/write-spec (most specific layer)
+candidates:
+  ✓ payments-skills:skill/write-spec  team:payments-dev (rank 20, priority 0) — winner
+  ✗ eng-skills:skill/write-spec       org:eng (rank 10, priority 0) — outranked by payments-skills:skill/write-spec
+targets:
+  claude-code: ~/.claude/skills/write-spec (link)

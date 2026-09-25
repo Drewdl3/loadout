@@ -1,0 +1,25 @@
+---
+source: crates/loadout-cli/src/schedule.rs
+expression: "format!(\"{service}\\n----\\n{timer}\")"
+---
+# Written by `lo schedule enable`.
+[Unit]
+Description=Loadout sync
+
+[Service]
+Type=oneshot
+Environment="PATH=/usr/bin:/bin"
+ExecStart="/opt/lo" "sync" "--quiet" "--non-interactive" "--exit-zero"
+
+----
+# Written by `lo schedule enable`.
+[Unit]
+Description=Loadout sync every 3600s
+
+[Timer]
+OnActiveSec=30s
+OnUnitActiveSec=3600s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

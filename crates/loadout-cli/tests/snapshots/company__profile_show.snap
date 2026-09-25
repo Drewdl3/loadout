@@ -1,0 +1,13 @@
+---
+source: crates/loadout-cli/tests/company-config.rs
+expression: out.stdout
+---
+Company config: [ROOT]/remotes/acme-config
+  company  acme (company)
+  org      eng (discovered)
+  role     sre (discovered)
+Not a member of:
+  org:cio (no match)
+  team:payments-dev (no match) — `lo join team:payments-dev`
+  product:billing (no match) — `lo join product:billing`
+  role:ci (no match)

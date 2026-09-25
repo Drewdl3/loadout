@@ -1,0 +1,195 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/template.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TemplateFrontmatter",
+  "description": "The frontmatter of a template's `SKILL.md`.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "template": {
+      "$ref": "#/$defs/TemplateMeta",
+      "default": {}
+    },
+    "loadout": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LoadoutBlock"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "$defs": {
+    "TemplateMeta": {
+      "description": "The `template:` block.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "What the template is for, shown when choosing one (the skill's own\n`description` describes the generated skill).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variables": {
+          "description": "The values to fill in.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TemplateVar"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "TemplateVar": {
+      "description": "One variable.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Used as `{{name}}` in the template's files.",
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default": {
+          "description": "Used when no value is given; a variable without one is required.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
+    "LoadoutBlock": {
+      "description": "The `loadout:` block in item frontmatter, also used for `LOADOUT.md`\n`defaults:`. Every field is optional; unset fields fall back to the\nsource defaults, then to built-in defaults.",
+      "type": "object",
+      "properties": {
+        "layer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "applies_to": {
+          "description": "Axis → allowed groups. All listed axes must match (AND); values within\nan axis are alternatives (OR).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "product": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Mode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locked": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "overridable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "targets": {
+          "description": "Optional include-list of target ids.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "author": {
+          "description": "Who wrote the item, e.g. `Ada Lovelace` or `Ada Lovelace <ada@example.com>`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "co_authors": {
+          "description": "Other people who contributed to it. A single string is accepted\ntoo; `coAuthors` / `coAuthor` are accepted as spellings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "Mode": {
+      "description": "How an item's enabled state is decided.",
+      "oneOf": [
+        {
+          "description": "Always enabled; user toggles are ignored.",
+          "type": "string",
+          "const": "required"
+        },
+        {
+          "description": "Enabled unless the user toggles it off.",
+          "type": "string",
+          "const": "default-on"
+        },
+        {
+          "description": "Disabled unless the user toggles it on.",
+          "type": "string",
+          "const": "default-off"
+        }
+      ]
+    }
+  }
+}

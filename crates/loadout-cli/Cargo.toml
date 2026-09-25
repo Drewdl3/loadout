@@ -1,0 +1,60 @@
+[package]
+name = "loadout-cli"
+description = "Loadout command-line interface (the `lo` binary)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "lo"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+blake3.workspace = true
+dialoguer.workspace = true
+directories.workspace = true
+loadout-audit.workspace = true
+loadout-code.workspace = true
+loadout-core.workspace = true
+loadout-git.workspace = true
+loadout-members.workspace = true
+secrecy.workspace = true
+ureq.workspace = true
+loadout-model.workspace = true
+loadout-search.workspace = true
+loadout-secrets.workspace = true
+loadout-targets.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+tempfile.workspace = true
+qrcode.workspace = true
+tiny_http.workspace = true
+ratatui.workspace = true
+getrandom.workspace = true
+sha2.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+loadout-git = { workspace = true, features = ["test-support"] }
+loadout-members = { workspace = true, features = ["test-support"] }
+loadout-secrets = { workspace = true, features = ["test-support"] }
+loadout-targets = { workspace = true, features = ["test-support"] }
+insta.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+assert_cmd.workspace = true
+ureq.workspace = true
+predicates.workspace = true
+
+[lints]
+workspace = true

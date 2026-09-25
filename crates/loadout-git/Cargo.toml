@@ -1,0 +1,27 @@
+[package]
+name = "loadout-git"
+description = "Loadout Git clone/fetch/checkout and signature verification"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+# Fixture-repo helpers for tests in this and other crates.
+test-support = ["dep:tempfile"]
+
+[dependencies]
+blake3.workspace = true
+tempfile = { workspace = true, optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+# Enables `test-support` for this crate's own integration tests.
+loadout-git = { path = ".", features = ["test-support"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

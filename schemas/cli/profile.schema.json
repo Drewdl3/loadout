@@ -1,0 +1,112 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/profile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProfileReport",
+  "description": "`--json` output of `lo profile show`.",
+  "type": "object",
+  "properties": {
+    "company_config": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "profile": {
+      "description": "Layer → groups you belong to.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "groups": {
+      "description": "Every company config group and how its membership was decided (after the\nlast discovery).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/GroupStatus"
+      }
+    },
+    "refreshed_at": {
+      "description": "Unix time of the last discovery.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "profile",
+    "groups"
+  ],
+  "$defs": {
+    "GroupStatus": {
+      "type": "object",
+      "properties": {
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "member": {
+          "type": "boolean"
+        },
+        "basis": {
+          "$ref": "#/$defs/Basis"
+        },
+        "joinable": {
+          "description": "Whether `lo join` is allowed for this group.",
+          "type": "boolean"
+        },
+        "error": {
+          "description": "Provider error when `basis` is `cached`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "layer",
+        "group",
+        "member",
+        "basis",
+        "joinable"
+      ]
+    },
+    "Basis": {
+      "description": "How a group's membership was decided.",
+      "oneOf": [
+        {
+          "description": "The company's own group: everyone.",
+          "type": "string",
+          "const": "company"
+        },
+        {
+          "description": "The membership rule was evaluated.",
+          "type": "string",
+          "const": "rule"
+        },
+        {
+          "description": "`lo join`.",
+          "type": "string",
+          "const": "joined"
+        },
+        {
+          "description": "`lo leave`.",
+          "type": "string",
+          "const": "left"
+        },
+        {
+          "description": "A provider failed; the cached profile was used.",
+          "type": "string",
+          "const": "cached"
+        }
+      ]
+    }
+  }
+}

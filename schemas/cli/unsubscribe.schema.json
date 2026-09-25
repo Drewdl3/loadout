@@ -1,0 +1,20 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/unsubscribe.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SubscriptionReport",
+  "description": "`--json` output of `lo subscribe` and `lo unsubscribe`.",
+  "type": "object",
+  "properties": {
+    "url": {
+      "type": "string"
+    },
+    "changed": {
+      "description": "Whether the config changed (false: already subscribed).",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "url",
+    "changed"
+  ]
+}

@@ -1,0 +1,13 @@
+---
+source: crates/loadout-cli/tests/info_targets.rs
+expression: src.stdout
+---
+team-skills — team:payments-dev
+[ROOT]/remotes/team-skills @ [SHORT-SHA]
+Payments skills.
+Owners: @acme/payments
+Items: agent/reviewer, skill/write-spec
+
+# Team skills
+
+Read me.

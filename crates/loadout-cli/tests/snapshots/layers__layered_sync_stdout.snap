@@ -1,0 +1,7 @@
+---
+source: crates/loadout-cli/tests/layers.rs
+expression: out.stdout
+---
+acme-company             [SHORT-SHA]  3 items
+payments                 [SHORT-SHA]  2 items
+claude-code: 2 added, 0 updated, 0 removed, 0 unchanged

@@ -1,0 +1,113 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StatusReport",
+  "description": "`--json` output of `lo status`.",
+  "type": "object",
+  "properties": {
+    "last_sync": {
+      "description": "RFC 3339 time of the last successful `lo sync`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sources": {
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0
+    },
+    "enabled_items": {
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0
+    },
+    "pending": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PendingSummary"
+      }
+    },
+    "audit_blocked": {
+      "description": "True when a pending change is blocked by a critical audit finding.",
+      "type": "boolean"
+    },
+    "audit_findings": {
+      "description": "Audit findings (warn or worse) on pending changes.",
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0
+    },
+    "conflicts": {
+      "description": "True when some `kind/name` has an unresolved equal-rank conflict.",
+      "type": "boolean"
+    },
+    "fingerprint": {
+      "description": "Configuration fingerprint; equal on two machines iff\ntheir agent configuration is identical.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "sources",
+    "enabled_items",
+    "pending",
+    "audit_blocked",
+    "audit_findings",
+    "conflicts"
+  ],
+  "$defs": {
+    "PendingSummary": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/Reason"
+        }
+      },
+      "required": [
+        "source",
+        "to",
+        "reason"
+      ]
+    },
+    "Reason": {
+      "description": "Why a change was not applied.",
+      "oneOf": [
+        {
+          "description": "The source's layer is not in `auto_apply`.",
+          "type": "string",
+          "const": "review"
+        },
+        {
+          "description": "Manual subscriptions are never auto-applied.",
+          "type": "string",
+          "const": "manual-source"
+        },
+        {
+          "description": "The audit found `high` issues.",
+          "type": "string",
+          "const": "audit"
+        },
+        {
+          "description": "The audit found `critical` issues; approving needs `--force-audit`.",
+          "type": "string",
+          "const": "blocked"
+        }
+      ]
+    }
+  }
+}

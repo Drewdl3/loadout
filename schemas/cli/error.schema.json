@@ -1,0 +1,15 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/error.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ErrorReport",
+  "description": "`--json` error output.",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "error"
+  ]
+}

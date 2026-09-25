@@ -1,0 +1,123 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/info.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InfoReport",
+  "description": "`--json` output of `lo info`.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "items": {
+          "description": "Items of this source in the last sync (`kind/name`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "description": "The Markdown body of `LOADOUT.md`.",
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "source"
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "url",
+        "commit",
+        "layer",
+        "owners",
+        "items",
+        "body"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "`source:kind/name`.",
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "layer": {
+          "type": "string"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "co_authors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "text": {
+          "description": "The item's main file (`SKILL.md`, `<name>.md`), including\nfrontmatter.",
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "item"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "layer",
+        "enabled",
+        "co_authors",
+        "text"
+      ]
+    }
+  ]
+}

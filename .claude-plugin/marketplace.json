@@ -1,0 +1,17 @@
+{
+  "name": "loadout",
+  "owner": {
+    "name": "Loadout contributors",
+    "url": "https://github.com/Drewdl3/loadout"
+  },
+  "description": "Claude Code integration for Loadout.",
+  "plugins": [
+    {
+      "name": "loadout",
+      "source": "./shims/claude-code",
+      "description": "/lo command, sync on session start, and skills for using the lo CLI and writing sources.",
+      "version": "0.3.1",
+      "license": "MIT"
+    }
+  ]
+}

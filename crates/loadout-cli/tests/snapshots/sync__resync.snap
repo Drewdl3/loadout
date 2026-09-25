@@ -1,0 +1,6 @@
+---
+source: crates/loadout-cli/tests/sync.rs
+expression: out.stdout
+---
+team-skills              [SHORT-SHA]  2 items
+claude-code: 0 added, 0 updated, 0 removed, 2 unchanged

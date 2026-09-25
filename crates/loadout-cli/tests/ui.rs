@@ -368,6 +368,71 @@ fn ui_toggles_prefers_and_exports_a_pull_request() {
     assert_eq!(s.git.head(&app.path).unwrap(), main_before);
 }
 
+/// Saved-but-unshared edits are listed per source until they're exported.
+#[test]
+fn drafts_list_unshared_changes_until_exported() {
+    let (s, _app) = world();
+    let mut routes = BTreeMap::new();
+    routes.insert(
+        "/repos/acme/app-skills/pulls".to_owned(),
+        (
+            201,
+            r#"{"html_url":"https://github.com/acme/app-skills/pull/8","number":8}"#.to_owned(),
+        ),
+    );
+    let github = MockServer::start(routes);
+    let ui = Ui::start(&s, github.url());
+    let drafts = |ui: &Ui| ui.get("/api/drafts").1["output"]["sources"].clone();
+    assert_eq!(drafts(&ui), json!([]));
+
+    // Reading an item clones the source but changes nothing.
+    ui.get("/api/source-item?source=other-skills&key=skill%2Fextra");
+    assert_eq!(drafts(&ui), json!([]));
+
+    for (source, key, text) in [
+        (
+            "app-skills",
+            "skill/new-one",
+            skill("new-one", "Brand new."),
+        ),
+        ("other-skills", "skill/extra", skill("extra", "Changed.")),
+    ] {
+        let (status, v) = ui.post(
+            "/api/source-item",
+            json!({"source": source, "key": key, "text": text}),
+        );
+        assert_eq!(status, 200, "{v}");
+    }
+    let d = drafts(&ui);
+    let by = |name: &str| {
+        d.as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["source"] == name)
+            .cloned()
+            .unwrap()
+    };
+    assert_eq!(
+        by("app-skills")["items"],
+        json!([{"key": "skill/new-one", "change": "added"}])
+    );
+    assert_eq!(
+        by("other-skills")["items"],
+        json!([{"key": "skill/extra", "change": "modified"}])
+    );
+    assert!(by("app-skills")["path"].as_str().unwrap().contains("work"));
+
+    // Exporting proposes the edits; they're no longer drafts.
+    let (_, v) = ui.post(
+        "/api/export",
+        json!({"source": "app-skills", "message": "Add new-one"}),
+    );
+    assert_eq!(v["code"], 0, "{v}");
+    let d = drafts(&ui);
+    assert_eq!(d.as_array().unwrap().len(), 1, "{d}");
+    assert_eq!(d[0]["source"], "other-skills");
+}
+
 #[test]
 fn move_item_between_sources() {
     let (s, _app) = world();

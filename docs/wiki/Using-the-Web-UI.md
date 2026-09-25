@@ -136,6 +136,12 @@ New users can also get here from **Start here** → **I have a share code**.
 
 ## Create & edit
 
+- **Not shared yet** (at the top, when there's something to show): everything
+  you've created, changed or removed in each source's working copy that isn't
+  in a pull request yet, with an **Edit** button per item, the working copy's
+  folder, and **Open pull request**. The sidebar's **Create & edit** entry
+  shows how many there are. These items don't appear in Browse skills or Your
+  layers until the pull request is merged and you update.
 - **New skill**: a form that writes the `SKILL.md` for you.
 - **Share skills you already have**: finds skills already in your AI tools'
   folders and copies the ones you pick into a source.

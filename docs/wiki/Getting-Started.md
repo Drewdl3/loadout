@@ -5,7 +5,7 @@ It takes about five minutes. You don't need to know Git.
 
 ## 1. Install `lo`
 
-**Linux or macOS (x64):**
+**Linux or macOS (x64 or arm64):**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Drewdl3/loadout/main/install.sh | sh
@@ -20,7 +20,7 @@ irm https://raw.githubusercontent.com/Drewdl3/loadout/main/install.ps1 | iex
 The scripts download the latest release, check it against the published
 checksums, and put `lo` on your `PATH`.
 
-**Other machines (e.g. ARM):** install [Rust](https://rustup.rs) 1.96 or
+**Other machines:** install [Rust](https://rustup.rs) 1.96 or
 newer, then:
 
 ```sh

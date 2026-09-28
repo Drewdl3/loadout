@@ -21,9 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # amd64 only for now; arm64 targets can be re-added later.
           - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, tool: zigbuild }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-latest, tool: zigbuild }
           - { target: x86_64-apple-darwin, os: macos-15-intel, tool: cargo }
+          - { target: aarch64-apple-darwin, os: macos-15, tool: cargo }
           - { target: x86_64-pc-windows-msvc, os: windows-latest, tool: cargo }
     runs-on: ${{ matrix.os }}
     steps:
@@ -87,7 +88,9 @@ jobs:
       matrix:
         include:
           - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
           - { target: x86_64-apple-darwin, os: macos-15-intel }
+          - { target: aarch64-apple-darwin, os: macos-15 }
           - { target: x86_64-pc-windows-msvc, os: windows-latest }
     runs-on: ${{ matrix.os }}
     steps:

@@ -39,7 +39,7 @@ describe in a small TOML file) in that tool's own format.
 
 ## Install
 
-Linux and macOS (x64; checksum-verified against the release's `SHA256SUMS`):
+Linux and macOS (x64 and arm64; checksum-verified against the release's `SHA256SUMS`):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Drewdl3/loadout/main/install.sh | sh
@@ -53,13 +53,13 @@ Windows (x64, PowerShell):
 irm https://raw.githubusercontent.com/Drewdl3/loadout/main/install.ps1 | iex
 ```
 
-Anywhere else (arm64), build from source with Rust 1.96+:
+Anywhere else, build from source with Rust 1.96+:
 
 ```sh
 cargo install --git https://github.com/Drewdl3/loadout loadout-cli
 ```
 
-Prebuilt static binaries (amd64: Linux musl, macOS, Windows) are attached to
+Prebuilt static binaries (x64 and arm64 for Linux musl and macOS, x64 for Windows) are attached to
 each GitHub Release. Update later with `lo self-update`. You need `git` on
 `PATH`; Loadout uses your normal Git credentials.
 

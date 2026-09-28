@@ -60,9 +60,14 @@ impl Report for ApplyReport {
                 .as_deref()
                 .map(|v| format!("  (upstream of {v})"))
                 .unwrap_or_default();
+            let at = s
+                .path
+                .as_deref()
+                .map(|p| format!("  (in {p}/)"))
+                .unwrap_or_default();
             writeln!(
                 out,
-                "{:<24} {}  {} item{}{}{moved}{via}",
+                "{:<24} {}  {} item{}{}{moved}{via}{at}",
                 s.name,
                 &s.commit[..s.commit.len().min(8)],
                 s.items,

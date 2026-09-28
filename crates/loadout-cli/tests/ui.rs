@@ -923,3 +923,83 @@ fn share_page_exports_previews_and_imports() {
     assert_eq!(done["output"]["fingerprint"], fp.as_str());
     assert!(b.skills_dir().join("write-spec/SKILL.md").exists());
 }
+
+/// A nested source is edited in its own folder of the repo's working
+/// clone, and its drafts are listed under it, not under the repo's root.
+#[test]
+fn nested_sources_are_edited_in_their_folder() {
+    let s = Sandbox::with_claude();
+    let team = source(
+        &s,
+        "team-skills",
+        "team",
+        "payments-dev",
+        &[
+            (
+                "LOADOUT.md",
+                "---\nloadout: 1\nname: team-skills\nlayer: team\ngroup: payments-dev\nnested: [squads]\n---\n",
+            ),
+            (
+                "squads/beaver/LOADOUT.md",
+                "---\nloadout: 1\nname: beaver\nlayer: squad\ngroup: beaver\n---\n",
+            ),
+            ("squads/beaver/skills/dam/SKILL.md", &skill("dam", "Dam.")),
+        ],
+    );
+    s.write_config("[profile]\nteam = [\"payments-dev\"]\nsquad = [\"beaver\"]\n");
+    s.ok(&["subscribe", &team.url()]);
+    s.ok(&["sync"]);
+    let github = MockServer::start(BTreeMap::new());
+    let ui = Ui::start(&s, github.url());
+
+    let (_, v) = ui.get("/api/sources");
+    let sources = v["output"]["sources"].as_array().unwrap();
+    let beaver = sources.iter().find(|x| x["name"] == "beaver").unwrap();
+    assert_eq!(beaver["parent"], "team-skills");
+    assert_eq!(beaver["path"], "squads/beaver");
+
+    let (_, item) = ui.get("/api/source-item?source=beaver&key=skill%2Fdam");
+    assert!(
+        item["output"]["text"].as_str().unwrap().contains("Dam."),
+        "{item}"
+    );
+    let (status, v) = ui.post(
+        "/api/source-item",
+        json!({"source": "beaver", "key": "skill/lodge", "text": skill("lodge", "Lodge.")}),
+    );
+    assert_eq!(status, 200, "{v}");
+    let (_, d) = ui.get("/api/drafts");
+    let d = &d["output"]["sources"];
+    assert_eq!(d.as_array().unwrap().len(), 1, "{d}");
+    assert_eq!(d[0]["source"], "beaver");
+    assert_eq!(
+        d[0]["items"],
+        json!([{"key": "skill/lodge", "change": "added"}])
+    );
+    let work = s.data.join("work");
+    let written: Vec<_> = walk(&work)
+        .into_iter()
+        .filter(|p| p.ends_with("lodge/SKILL.md"))
+        .collect();
+    assert_eq!(written.len(), 1);
+    assert!(
+        written[0]
+            .to_string_lossy()
+            .replace('\\', "/")
+            .contains("squads/beaver/skills/lodge"),
+        "{written:?}"
+    );
+}
+
+fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(walk(&p));
+        } else {
+            out.push(p);
+        }
+    }
+    out
+}

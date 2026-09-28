@@ -217,6 +217,22 @@ that group's source. Any other upstream counts as a manual source: it needs
 `allow_manual_sources` and is never auto-applied. An upstream that can't be
 fetched is skipped with a warning.
 
+**Nested sources.** One repo can hold a team and its squads. The root
+`LOADOUT.md` lists folders under `nested:`, and each `LOADOUT.md` found below
+them is a source of its own, with its own name, layer and group:
+
+```yaml
+# LOADOUT.md                   # squads/beaver/LOADOUT.md
+name: payments-team            name: beaver-squad
+layer: team                    layer: squad
+group: payments-dev            group: beaver
+nested: [squads]
+```
+
+They're fetched, reviewed and pinned together with the repo, and you get the
+items of the squads you're in. `lo sync` shows them as `(in squads/beaver/)`.
+See [`docs/agents.md`](docs/agents.md#nested-sources-one-repo-several-manifests).
+
 **Templates.** A higher layer can publish a skill for others to adapt, for
 example "how we work with pull requests", which each squad fills in with its
 own conventions. A template is `templates/<name>/SKILL.md` (plus any other

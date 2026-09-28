@@ -59,6 +59,13 @@
             "null"
           ]
         },
+        "path": {
+          "description": "For a nested source: the directory of its `LOADOUT.md` in the repo.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "items": {
           "type": "array",
           "items": {

@@ -39,6 +39,11 @@ A source can **build on** another one with `upstream:`. The Checkout squad's
 source can name Payments' source as its upstream, and anyone who adds the
 Checkout source gets Payments' items too.
 
+One repo can also hold **several sources**: a team's items at the top and a
+folder per squad, each with its own `LOADOUT.md` (the root one lists the
+folders under `nested:`). Adding the repo gets you the team's items plus
+those of the squads you're in.
+
 ## Groups and layers: who gets what
 
 A **group** (the CLI and file formats call it a *group*) is a set of people: the company,

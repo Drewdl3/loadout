@@ -278,7 +278,7 @@ fn collect(ctx: &Ctx, all: bool) -> Result<(Vec<Found>, Vec<String>)> {
     let mut dirs: Vec<(PathBuf, bool)> = resolved
         .sources
         .iter()
-        .map(|s| (repo_dir(&ctx.paths, &s.url), false))
+        .map(|s| (s.dir_in(&repo_dir(&ctx.paths, &s.url)), false))
         .collect();
     if all {
         dirs.extend(

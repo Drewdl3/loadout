@@ -460,8 +460,10 @@ pub fn load_one(
                     });
                 }
             };
+            // Nested sources share the repo's commits, so one layer that
+            // needs signing covers the whole repo.
             if let Some(sig) = opts.signing
-                && sig.requires(&new.default_layer)
+                && let Some(layer) = new.layers().find(|l| sig.requires(l))
                 && let Err(e) = git.verify_commit(&dir, &to, &sig.keys)
             {
                 let kept = match &applied {
@@ -472,7 +474,7 @@ pub fn load_one(
                     "{}: REFUSED commit {}: not signed by an allowed signer ({} layer requires signed commits); {kept}. {}",
                     sub.url,
                     short(&to),
-                    new.default_layer,
+                    layer,
                     e.to_string().lines().last().unwrap_or_default()
                 ));
                 return Ok(match (applied, old) {

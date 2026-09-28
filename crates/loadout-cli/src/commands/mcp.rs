@@ -57,10 +57,12 @@ pub fn load_installed(ctx: &Ctx, id: &ItemId) -> Result<Installed> {
     let server = McpServer::from_frontmatter(&doc.parse::<McpFrontmatter>()?)
         .with_context(|| format!("{id}"))?;
     let source_dir = Resolved::load(&ctx.paths.resolved_file())?.and_then(|r| {
-        r.sources
-            .iter()
-            .find(|s| s.name == id.source())
-            .map(|s| loadout_git::repo_dir(&ctx.paths.repos_dir(), &normalize_url(&s.url)))
+        r.sources.iter().find(|s| s.name == id.source()).map(|s| {
+            s.dir_in(&loadout_git::repo_dir(
+                &ctx.paths.repos_dir(),
+                &normalize_url(&s.url),
+            ))
+        })
     });
     Ok(Installed {
         id: id.clone(),

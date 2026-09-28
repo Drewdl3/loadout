@@ -91,6 +91,37 @@ under your team's group, or have people `lo subscribe` to it.
 `--upstream` makes your source build on another: anyone who adds yours also
 gets the upstream's items, each at its own layer.
 
+### One repo for a team and its squads
+
+If your squads would rather share the team's repo than each have their own,
+give each squad a folder with its own `LOADOUT.md`, and list the folder that
+holds them in the team's `LOADOUT.md`:
+
+```yaml
+# LOADOUT.md (the team's)
+loadout: 1
+name: payments-team
+layer: team
+group: payments-dev
+nested: [squads]
+```
+
+```yaml
+# squads/beaver/LOADOUT.md
+loadout: 1
+name: beaver-squad
+layer: squad
+group: beaver
+```
+
+Put the squad's skills in `squads/beaver/skills/`, and so on. Everyone who
+adds the team's repo gets the team's items, plus the items of whichever
+squads they're in (the company config decides who's in each squad; see
+[Setting up your company](Setting-Up-Your-Company.md#an-example)). A squad's
+version of a skill replaces the team's for its members. Squad folders can sit deeper (`squads/west/alpha/`), and a squad can
+list `nested:` folders of its own. The details are in
+[the format reference](../agents.md#nested-sources-one-repo-several-manifests).
+
 ## Templates
 
 A template is a skill with blanks, written once by a broader group and filled

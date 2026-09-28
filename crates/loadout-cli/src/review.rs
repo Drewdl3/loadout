@@ -11,7 +11,7 @@ use loadout_targets::fsutil::atomic_write;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::scan::ScannedSource;
+use crate::scan::{ScannedItem, ScannedSource};
 
 pub const STATE_VERSION: u32 = 1;
 
@@ -193,7 +193,13 @@ impl Reviewer<'_> {
             Verdict::Apply
         } else if c.manual {
             Verdict::Hold(Reason::ManualSource)
-        } else if self.auto_apply_layers.contains(&c.new.default_layer) {
+        } else if c
+            .new
+            .layers()
+            .all(|l| self.auto_apply_layers.iter().any(|a| a == l))
+        {
+            // A repo with nested sources updates as one: every layer in it
+            // must be auto-applied.
             Verdict::Apply
         } else {
             Verdict::Hold(Reason::Review)
@@ -202,42 +208,46 @@ impl Reviewer<'_> {
     }
 }
 
+/// How an item is named in a change: `kind/name` for the repo's root
+/// source (stable if it's renamed), the full id for a nested source's
+/// items, which may share a `kind/name` with the root's.
+fn label(src: &ScannedSource, item: &ScannedItem) -> String {
+    if item.id.source() == src.manifest.name {
+        item.id.key().to_string()
+    } else {
+        item.id.to_string()
+    }
+}
+
+/// Label → content hash of every item in a scan.
+fn hashes(src: Option<&ScannedSource>) -> BTreeMap<String, &str> {
+    src.map(|s| {
+        s.items
+            .iter()
+            .map(|i| (label(s, i), i.content_hash.as_str()))
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
 /// Audits the items that are new or whose content changed.
 pub fn audit_changed(
     rules: &RuleSet,
     old: Option<&ScannedSource>,
     new: &ScannedSource,
 ) -> Vec<Finding> {
-    let before: BTreeMap<String, &str> = old
-        .map(|o| {
-            o.items
-                .iter()
-                .map(|i| (i.id.key().to_string(), i.content_hash.as_str()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let before = hashes(old);
     new.items
         .iter()
-        .filter(|i| before.get(&i.id.key().to_string()) != Some(&i.content_hash.as_str()))
+        .filter(|i| before.get(&label(new, i)) != Some(&i.content_hash.as_str()))
         .flat_map(|i| crate::audit::audit(rules, i))
         .collect()
 }
 
 /// Items added, removed and changed between two scans of a source.
 pub fn item_changes(old: Option<&ScannedSource>, new: &ScannedSource) -> ItemChanges {
-    let before: BTreeMap<String, &str> = old
-        .map(|o| {
-            o.items
-                .iter()
-                .map(|i| (i.id.key().to_string(), i.content_hash.as_str()))
-                .collect()
-        })
-        .unwrap_or_default();
-    let after: BTreeMap<String, &str> = new
-        .items
-        .iter()
-        .map(|i| (i.id.key().to_string(), i.content_hash.as_str()))
-        .collect();
+    let before = hashes(old);
+    let after = hashes(Some(new));
     let keys: BTreeSet<&String> = before.keys().chain(after.keys()).collect();
     let mut out = ItemChanges::default();
     for k in keys {

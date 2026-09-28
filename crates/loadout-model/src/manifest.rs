@@ -42,6 +42,12 @@ pub struct Manifest {
     /// installs theirs, each at its own layer and group.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub upstream: Vec<Upstream>,
+    /// Directories (relative to this manifest) searched for more
+    /// `LOADOUT.md` files, e.g. `[squads]` in a team repo that holds a
+    /// folder per squad. Each one found is a source of its own (own name,
+    /// layer, group, defaults and paths) fetched and pinned with this repo.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nested: Vec<String>,
     /// Company config block (only in the company config source), kept
     /// verbatim here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -164,12 +170,7 @@ impl SourcePaths {
             .map(|k| (format!("{}s", k.as_str()), self.for_kind(k)))
             .chain([("templates".to_owned(), self.templates())]);
         for (field, p) in dirs {
-            let bad = p.is_empty()
-                || p.starts_with('/')
-                || p.contains('\\')
-                || p.contains(':')
-                || p.split('/').any(|c| c.is_empty() || c == "." || c == "..");
-            if bad {
+            if !is_inner_path(p) {
                 return Err(ModelError::InvalidManifest(format!(
                     "paths.{field} must be a relative path inside the repo, got {p:?}"
                 )));
@@ -177,6 +178,17 @@ impl SourcePaths {
         }
         Ok(())
     }
+}
+
+/// A `/`-separated relative path that stays inside the repo (a trailing
+/// `/` is allowed).
+fn is_inner_path(p: &str) -> bool {
+    let p = p.trim_end_matches('/');
+    !(p.is_empty()
+        || p.starts_with('/')
+        || p.contains('\\')
+        || p.contains(':')
+        || p.split('/').any(|c| c.is_empty() || c == "." || c == ".."))
 }
 
 /// A parsed `LOADOUT.md`: frontmatter plus the free-form Markdown body.
@@ -209,6 +221,11 @@ impl ManifestDoc {
         if let Some(u) = manifest.upstream.iter().find(|u| u.url().trim().is_empty()) {
             return Err(ModelError::InvalidManifest(format!(
                 "upstream entries need a URL, got {u:?}"
+            )));
+        }
+        if let Some(p) = manifest.nested.iter().find(|p| !is_inner_path(p)) {
+            return Err(ModelError::InvalidManifest(format!(
+                "nested entries must be relative paths inside the repo, got {p:?}"
             )));
         }
         Ok(ManifestDoc {
@@ -297,6 +314,14 @@ Free-form docs for humans.
                 "absolute path",
                 "---\nloadout: 1\nname: x\nlayer: team\npaths: { skills: /etc }\n---\n",
             ),
+            (
+                "escaping nested",
+                "---\nloadout: 1\nname: x\nlayer: team\nnested: [../other]\n---\n",
+            ),
+            (
+                "root as nested",
+                "---\nloadout: 1\nname: x\nlayer: team\nnested: [.]\n---\n",
+            ),
         ];
         for (what, text) in cases {
             assert!(
@@ -339,6 +364,18 @@ Free-form docs for humans.
             ManifestDoc::parse("---\nloadout: 1\nname: x\nlayer: t\nupstream: ['']\n---\n")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn nested_directories() {
+        let doc = ManifestDoc::parse(
+            "---\nloadout: 1\nname: x\nlayer: team\nnested: [squads/, org/teams]\n---\n",
+        )
+        .unwrap();
+        assert_eq!(doc.manifest.nested, ["squads/", "org/teams"]);
+        let plain = ManifestDoc::parse("---\nloadout: 1\nname: x\nlayer: team\n---\n").unwrap();
+        assert!(plain.manifest.nested.is_empty());
+        assert!(!plain.manifest.extra.contains_key("nested"));
     }
 
     #[test]

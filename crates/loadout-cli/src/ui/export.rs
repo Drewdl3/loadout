@@ -32,11 +32,22 @@ pub fn drafts(ctx: &Ctx) -> Reply {
         let git = Git::new();
         let mut sources = Vec::new();
         for src in &resolved.sources {
-            let dir = work::work_dir(ctx, &src.url);
-            if !dir.join(".git").exists() {
+            let root = work::work_dir(ctx, &src.url);
+            if !root.join(".git").exists() {
                 continue;
             }
-            let entry = match work::changes(&git, &dir) {
+            let dir = src.dir_in(&root);
+            // Nested sources of the same repo inside this one list their
+            // own edits.
+            let own = src.path.as_deref().map(|p| format!("{p}/"));
+            let skip: Vec<&str> = resolved
+                .sources
+                .iter()
+                .filter(|o| o.url == src.url)
+                .filter_map(|o| o.path.as_deref())
+                .filter(|p| own.as_deref().is_none_or(|own| p.starts_with(own)))
+                .collect();
+            let entry = match work::changes(&git, &root, src.path.as_deref(), &skip) {
                 Ok(c) if c.is_empty() => continue,
                 Ok(c) => json!({
                     "source": src.name,

@@ -114,12 +114,56 @@ defaults:
   mode: default-on            # required | default-on | default-off
 upstream:                     # higher sources subscribers also get
   - https://git.example.com/acme/payments-skills
+nested: [pods]                # folders holding more LOADOUT.md files (optional)
 ---
 
 # Checkout squad
 
 Free text for humans; `lo info checkout-squad` shows it.
 ```
+
+### Nested sources: one repo, several manifests
+
+A repo can hold a team's items and a folder per squad. The root
+`LOADOUT.md` lists the folders under `nested:`, and every `LOADOUT.md`
+found below them (at any depth, skipping hidden folders and symlinks) is a
+source of its own:
+
+```
+payments-team/
+├── LOADOUT.md            # name: payments-team, layer: team, nested: [squads]
+├── skills/…
+└── squads/
+    ├── beaver/
+    │   ├── LOADOUT.md    # name: beaver-squad, layer: squad, group: beaver
+    │   └── skills/…
+    └── alpha/
+        ├── LOADOUT.md    # name: alpha-squad, layer: squad, group: alpha
+        └── skills/…
+```
+
+- A nested source has its own `name`, `layer`, `group`, `defaults` and
+  `paths` (relative to its folder); its item ids use its name
+  (`beaver-squad:skill/dam`).
+- It shares the repo's fetch, commit, review and `loadout.lock` entry, so
+  the repo's layers are combined: an update applies without review only
+  if every one of them is in `policy.auto_apply`, and a commit must be
+  signed if any of them is in `policy.require_signed`. Review lists a
+  nested source's items by full id (`changed: beaver-squad:skill/dam`).
+- Subscribing to the repo (or a company config group listing it) gets all
+  of them, but you only get a nested source's items if you're in its group:
+  through the company config (a group `squad:beaver` with a membership
+  rule, or `lo join squad:beaver`), or without one, `squad = ["beaver"]`
+  under `[profile]` in `config.toml`. Subscribing makes you a member of the
+  root's group only.
+- A nested `LOADOUT.md` may list `nested:` itself. `upstream:` and
+  `company:` are only read from the repo's root `LOADOUT.md`.
+- Names must be unique across everything you subscribe to; a nested
+  source whose name is taken is skipped with a warning, as is one whose
+  `LOADOUT.md` doesn't parse.
+- Edits in a working copy (`lo export-source beaver-squad`, **Edit** in
+  `lo ui`) go to the source's folder; exporting proposes every edit in that
+  repo's working copy.
 
 ### Skills: `skills/<name>/SKILL.md`
 

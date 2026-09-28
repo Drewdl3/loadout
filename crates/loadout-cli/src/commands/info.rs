@@ -155,7 +155,10 @@ pub fn run(ctx: &Ctx, args: InfoArgs) -> Result<u8> {
     };
     let what = args.what.trim();
     if let Some(src) = resolved.sources.iter().find(|s| s.name == what) {
-        let dir = loadout_git::repo_dir(&ctx.paths.repos_dir(), &normalize_url(&src.url));
+        let dir = src.dir_in(&loadout_git::repo_dir(
+            &ctx.paths.repos_dir(),
+            &normalize_url(&src.url),
+        ));
         let text = std::fs::read_to_string(dir.join(MANIFEST_FILE))
             .with_context(|| format!("reading {MANIFEST_FILE} of {}", src.name))?;
         let doc = ManifestDoc::parse(&text)?;

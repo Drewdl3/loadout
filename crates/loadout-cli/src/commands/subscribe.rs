@@ -261,6 +261,9 @@ pub struct PreviewSource {
     /// The source whose `upstream:` brings this one in.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
+    /// For a nested source: the directory of its `LOADOUT.md` in the repo.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     pub items: Vec<loadout_search::Doc>,
     /// Template ids (`source:template/name`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -283,9 +286,14 @@ impl Report for SubscribePreview {
                 .as_deref()
                 .map(|v| format!("  (upstream of {v})"))
                 .unwrap_or_default();
+            let at = s
+                .path
+                .as_deref()
+                .map(|p| format!("  (in {p}/)"))
+                .unwrap_or_default();
             writeln!(
                 out,
-                "{} ({}:{}) {}{via}",
+                "{} ({}:{}) {}{via}{at}",
                 s.name,
                 s.layer,
                 s.group.as_deref().unwrap_or("-"),
@@ -351,9 +359,23 @@ pub fn preview(ctx: &Ctx, url: &str, git_ref: Option<&str>) -> Result<SubscribeP
                 continue;
             }
         };
-        let templates = crate::scan::scan_templates(&dir)
-            .map(|(t, _)| t.into_iter().map(|t| t.id).collect())
-            .unwrap_or_default();
+        let templates = |dir: &std::path::Path| -> Vec<String> {
+            crate::scan::scan_templates(dir)
+                .map(|(t, _)| t.into_iter().map(|t| t.id).collect())
+                .unwrap_or_default()
+        };
+        let items = |source: &str| -> Vec<loadout_search::Doc> {
+            scanned
+                .items
+                .iter()
+                .filter(|i| i.id.source() == source)
+                .map(|i| {
+                    let mut d = crate::search::doc(i, loadout_search::State::NotSubscribed);
+                    d.body.clear();
+                    d
+                })
+                .collect()
+        };
         out.warnings.extend(
             scanned
                 .warnings
@@ -376,19 +398,26 @@ pub fn preview(ctx: &Ctx, url: &str, git_ref: Option<&str>) -> Result<SubscribeP
             layer: scanned.default_layer.clone(),
             group: scanned.default_group.clone(),
             description: scanned.manifest.description.clone(),
-            commit,
-            via,
-            items: scanned
-                .items
-                .iter()
-                .map(|i| {
-                    let mut d = crate::search::doc(i, loadout_search::State::NotSubscribed);
-                    d.body.clear();
-                    d
-                })
-                .collect(),
-            templates,
+            commit: commit.clone(),
+            via: via.clone(),
+            path: None,
+            items: items(&scanned.manifest.name),
+            templates: templates(&dir),
         });
+        for n in &scanned.nested {
+            out.sources.push(PreviewSource {
+                url: url.clone(),
+                name: n.manifest.name.clone(),
+                layer: n.default_layer.clone(),
+                group: n.default_group.clone(),
+                description: n.manifest.description.clone(),
+                commit: commit.clone(),
+                via: via.clone(),
+                path: Some(n.path.clone()),
+                items: items(&n.manifest.name),
+                templates: templates(&crate::work::join(&dir, &n.path)),
+            });
+        }
     }
     Ok(out)
 }

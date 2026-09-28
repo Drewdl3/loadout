@@ -652,19 +652,20 @@ const views = {
     m.append(pageHead("Sources", "The shared folders your skills come from", syncBtn()));
     const byName = new Map(out.sources.map(s => [s.name, s]));
     const kids = new Map();
-    for (const s of out.sources) if (s.via && byName.has(s.via)) { if (!kids.has(s.via)) kids.set(s.via, []); kids.get(s.via).push(s); }
+    const up = s => s.parent && byName.has(s.parent) ? s.parent : s.via && byName.has(s.via) ? s.via : null;
+    for (const s of out.sources) if (up(s)) { if (!kids.has(up(s))) kids.set(up(s), []); kids.get(up(s)).push(s); }
     const node = s => el("li", {},
       el("div", { class: "node" },
         el("span", { class: "n" }, s.name),
-        s.via ? el("span", { class: "badge upstream", title: `${s.via} builds on this source, so you get it too` }, "included by " + s.via) : s.manual ? el("span", { class: "badge", title: "You added this source yourself" }, "added by you") : el("span", { class: "badge", title: "Added because you're in one of your company's groups" }, "from your company"),
+        s.parent ? el("span", { class: "badge", title: `A folder of ${s.parent}'s repo with its own LOADOUT.md; you get its skills if you're in its group` }, "in " + s.path + "/") : s.via ? el("span", { class: "badge upstream", title: `${s.via} builds on this source, so you get it too` }, "included by " + s.via) : s.manual ? el("span", { class: "badge", title: "You added this source yourself" }, "added by you") : el("span", { class: "badge", title: "Added because you're in one of your company's groups" }, "from your company"),
         el("span", { class: "mono faint" }, short(s.commit)),
         el("span", { class: "grow" }),
         el("button", { class: "btn ghost", onclick: () => { current = "Catalog"; (views.Catalog.state = { q: "", all: false, sel: { source: new Set([s.name]) } }); show("Catalog"); } }, "See its skills"),
         el("button", { class: "btn ghost", onclick: () => show("Edit", { source: s.name }) }, "Edit"),
-        s.manual && !s.via ? el("button", { class: "btn", onclick: () => confirm(`Remove ${s.name}? Its skills will be taken out of your AI tools.`) && run(["unsubscribe", s.url], "Removed " + s.name).then(() => run(["sync"], "Updated")) }, "Remove") : null),
-      el("div", { class: "mono faint", style: "margin:-6px 0 6px;overflow-wrap:anywhere;font-size:11.5px" }, s.url),
+        s.manual && !s.via && !s.parent ? el("button", { class: "btn", onclick: () => confirm(`Remove ${s.name}? Its skills will be taken out of your AI tools.`) && run(["unsubscribe", s.url], "Removed " + s.name).then(() => run(["sync"], "Updated")) }, "Remove") : null),
+      s.parent ? null : el("div", { class: "mono faint", style: "margin:-6px 0 6px;overflow-wrap:anywhere;font-size:11.5px" }, s.url),
       kids.has(s.name) ? el("ul", { class: "tree" }, kids.get(s.name).map(node)) : null);
-    const roots = out.sources.filter(s => !s.via || !byName.has(s.via));
+    const roots = out.sources.filter(s => !up(s));
     m.append(el("div", { class: "card" },
       out.company_config ? el("div", { class: "muted", style: "margin-bottom:6px" }, "Your company's list of groups (company config): ", el("span", { class: "mono" }, out.company_config)) : null,
       roots.length ? el("ul", { class: "tree" }, roots.map(node)) : el("div", { class: "empty" }, "No sources yet. Add one below: paste the address someone gave you.")));
@@ -679,11 +680,12 @@ const views = {
         const total = p.sources.reduce((n, s) => n + s.items.length, 0);
         preview.replaceChildren(...[
           el("div", { class: "row", style: "margin:12px 0 4px" }, el("b", {}, `${p.sources.length} source(s), ${total} item(s)`),
-            p.sources.length > 1 ? el("span", { class: "muted" }, "including the sources it builds on") : null, el("span", { class: "grow" }),
+            p.sources.length > 1 ? el("span", { class: "muted" }, "including nested sources and the sources it builds on") : null, el("span", { class: "grow" }),
             el("button", { class: "btn primary", onclick: async () => { await run(["subscribe", u], "Added", false); await run(["sync"], "Updated"); } }, "Add and update")),
           p.sources.map((s, i) => el("details", { class: "src-preview", open: i === 0 },
             el("summary", {}, el("b", {}, s.name), el("span", { class: "mono muted" }, `${s.layer}:${s.group || "-"}`),
-              s.via ? el("span", { class: "badge upstream" }, "upstream of " + s.via) : null, el("span", { class: "faint" }, `${s.items.length} item(s)`)),
+              s.via ? el("span", { class: "badge upstream" }, "upstream of " + s.via) : null,
+              s.path ? el("span", { class: "badge" }, "in " + s.path + "/") : null, el("span", { class: "faint" }, `${s.items.length} item(s)`)),
             s.description ? el("div", { class: "muted", style: "margin:4px 0 4px 18px" }, s.description) : null,
             el("div", { style: "margin-left:18px" }, s.items.map(it => el("div", { class: "row", style: "margin-top:4px" },
               el("span", { class: "kind" }, it.kind), el("span", { class: "mono" }, it.name), el("span", { class: "muted" }, it.description || ""))),

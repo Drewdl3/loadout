@@ -71,6 +71,21 @@ company:
 The complete, runnable version is in
 [`examples/acme-config`](../../examples/acme-config/LOADOUT.md).
 
+If a team keeps its squads in its own repo (with `nested:`, see
+[Sharing skills](Sharing-Skills.md#one-repo-for-a-team-and-its-squads)),
+list the repo under the team's group only. Each squad's group needs just a
+membership rule and no `sources`, because its items come with the team's
+repo:
+
+```yaml
+    - layer: squad
+      name: beaver
+      membership: { github_team: "acme/beaver" }
+```
+
+The repo updates as one, so its changes skip review only if every layer in
+it (here `team` and `squad`) is in `auto_apply`.
+
 ## Deciding who's in each group
 
 | Rule | Someone is a member when |

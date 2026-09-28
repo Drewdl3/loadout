@@ -67,6 +67,20 @@ pub struct ResolvedSource {
     pub layer: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// For a nested source: the directory of its `LOADOUT.md` in the repo
+    /// at `url` (see `nested:`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+impl ResolvedSource {
+    /// The source's directory inside a clone of its repo at `repo`.
+    pub fn dir_in(&self, repo: &Path) -> PathBuf {
+        match &self.path {
+            Some(p) => crate::work::join(repo, p),
+            None => repo.to_path_buf(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

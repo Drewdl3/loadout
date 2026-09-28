@@ -85,7 +85,10 @@ pub fn run(ctx: &Ctx, args: AuditArgs) -> Result<u8> {
         let scanned = scan_source(dir)?;
         let rules = crate::audit::rules(ctx, None)?;
         let mut report = AuditReport {
-            sources: vec![scanned.manifest.name.clone()],
+            sources: std::iter::once(&scanned.manifest.name)
+                .chain(scanned.nested.iter().map(|n| &n.manifest.name))
+                .cloned()
+                .collect(),
             items: scanned.items.len(),
             warnings: scanned.warnings.clone(),
             ..AuditReport::default()
@@ -119,13 +122,19 @@ pub fn run(ctx: &Ctx, args: AuditArgs) -> Result<u8> {
         if args.source.as_ref().is_some_and(|n| n != &src.name) {
             continue;
         }
+        // A repo's scan includes its nested sources; keep this source's items.
         let dir = loadout_git::repo_dir(&ctx.paths.repos_dir(), &normalize_url(&src.url));
         match scan_source(&dir) {
             Ok(scanned) => {
-                for item in &scanned.items {
+                let items: Vec<_> = scanned
+                    .items
+                    .iter()
+                    .filter(|i| i.id.source() == src.name)
+                    .collect();
+                for item in &items {
                     report.findings.extend(crate::audit::audit(&rules, item));
                 }
-                report.items += scanned.items.len();
+                report.items += items.len();
                 report.sources.push(src.name.clone());
             }
             Err(e) => report.warnings.push(format!("{}: {e:#}", src.name)),

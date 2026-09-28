@@ -21,6 +21,9 @@ use crate::state::Resolved;
 pub struct Work {
     pub name: String,
     pub url: String,
+    /// The working clone of the source's repo (where Git runs).
+    pub root: PathBuf,
+    /// The source's directory in it: `root`, or a nested source's folder.
     pub dir: PathBuf,
 }
 
@@ -38,16 +41,16 @@ pub fn open(ctx: &Ctx, git: &Git, name: &str) -> Result<Work> {
     let Some(src) = resolved.sources.iter().find(|s| s.name == name) else {
         bail!("no source named {name:?} (see `lo info` / `lo list`)");
     };
-    let dir = work_dir(ctx, &src.url);
-    if !dir.join(".git").exists() {
-        std::fs::create_dir_all(dir.parent().expect("parent"))?;
+    let root = work_dir(ctx, &src.url);
+    if !root.join(".git").exists() {
+        std::fs::create_dir_all(root.parent().expect("parent"))?;
         git.run(
             None,
             [
                 "clone".as_ref(),
                 "--quiet".as_ref(),
                 src.url.as_ref(),
-                dir.as_os_str(),
+                root.as_os_str(),
             ],
         )
         .with_context(|| format!("cloning {} for editing", src.url))?;
@@ -55,7 +58,8 @@ pub fn open(ctx: &Ctx, git: &Git, name: &str) -> Result<Work> {
     Ok(Work {
         name: name.to_owned(),
         url: src.url.clone(),
-        dir,
+        dir: src.dir_in(&root),
+        root,
     })
 }
 
@@ -210,16 +214,34 @@ impl Changes {
     }
 }
 
-/// What `lo export-source` would propose from the working clone in `dir`.
-pub fn changes(git: &Git, dir: &Path) -> Result<Changes> {
+/// The edits in the working clone at `root` that belong to one source:
+/// the files under `path` (a nested source's directory; `None` for the
+/// repo root) minus those under `skip` (the directories of the sources
+/// nested inside it). All paths are `/`-separated and repo-relative.
+pub fn changes(git: &Git, root: &Path, path: Option<&str>, skip: &[&str]) -> Result<Changes> {
     let status = git.run(
-        Some(dir),
+        Some(root),
         ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     )?;
+    let dir = path.map_or_else(|| root.to_path_buf(), |p| join(root, p));
     let text = std::fs::read_to_string(dir.join(MANIFEST_FILE))
         .with_context(|| format!("{} has no {MANIFEST_FILE}", dir.display()))?;
     let paths = ManifestDoc::parse(&text)?.manifest.paths;
-    Ok(classify(&paths, &parse_status(&status)))
+    let files: Vec<(Change, String)> = parse_status(&status)
+        .into_iter()
+        .filter(|(_, f)| !skip.iter().any(|s| under(f, s)))
+        .filter_map(|(c, f)| match path {
+            Some(p) => Some((c, f.strip_prefix(p)?.strip_prefix('/')?.to_owned())),
+            None => Some((c, f)),
+        })
+        .collect();
+    Ok(classify(&paths, &files))
+}
+
+/// Whether repo path `file` is inside directory `dir`.
+fn under(file: &str, dir: &str) -> bool {
+    file.strip_prefix(dir)
+        .is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// `git status --porcelain=v1 -z` → (change, repo path). A rename is its new

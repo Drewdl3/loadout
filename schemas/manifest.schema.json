@@ -61,6 +61,13 @@
         "$ref": "#/$defs/Upstream"
       }
     },
+    "nested": {
+      "description": "Directories (relative to this manifest) searched for more\n`LOADOUT.md` files, e.g. `[squads]` in a team repo that holds a\nfolder per squad. Each one found is a source of its own (own name,\nlayer, group, defaults and paths) fetched and pinned with this repo.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "company": {
       "description": "Company config block (only in the company config source), kept\nverbatim here.",
       "anyOf": [

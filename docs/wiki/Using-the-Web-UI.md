@@ -100,8 +100,10 @@ See [Updates and review](Updates-and-Review.md).
 ## Sources
 
 The shared folders your skills come from, drawn as a tree: a source that
-builds on another (`upstream:`) is shown under it. Each is marked *from your
-company*, *added by you*, or *included by …*. From here you can:
+builds on another (`upstream:`) is shown under it, and so is a squad's source
+kept in a folder of a team's repo (`nested:`, marked *in squads/…/*). Each is
+marked *from your company*, *added by you*, or *included by …*. From here you
+can:
 
 - **See its skills** (opens Browse skills filtered to it)
 - **Edit** its items

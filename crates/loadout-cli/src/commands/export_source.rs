@@ -107,7 +107,7 @@ pub fn run(ctx: &Ctx, args: ExportSourceArgs) -> Result<u8> {
         ctx.emit(&report)?;
         return Ok(exit::OK);
     }
-    let status = git.run(Some(&w.dir), ["status", "--porcelain"])?;
+    let status = git.run(Some(&w.root), ["status", "--porcelain"])?;
     if status.trim().is_empty() {
         bail!(
             "no edits in the working clone of {} ({}); edit items there or in `lo ui` first",
@@ -115,9 +115,9 @@ pub fn run(ctx: &Ctx, args: ExportSourceArgs) -> Result<u8> {
             w.dir.display()
         );
     }
-    let base = work::default_branch(&git, &w.dir)?;
+    let base = work::default_branch(&git, &w.root)?;
     let user = git
-        .run(Some(&w.dir), ["config", "user.name"])
+        .run(Some(&w.root), ["config", "user.name"])
         .ok()
         .map(|u| slug(u.trim(), 24))
         .filter(|u| !u.is_empty())
@@ -141,11 +141,11 @@ pub fn run(ctx: &Ctx, args: ExportSourceArgs) -> Result<u8> {
     if branch == base || branch.trim_start_matches("refs/heads/") == base {
         bail!("refusing to push to the default branch {base:?}");
     }
-    git.run(Some(&w.dir), ["checkout", "--quiet", "-b", &branch])
+    git.run(Some(&w.root), ["checkout", "--quiet", "-b", &branch])
         .with_context(|| format!("creating branch {branch}"))?;
-    git.run(Some(&w.dir), ["add", "--all"])?;
+    git.run(Some(&w.root), ["add", "--all"])?;
     let committed = git.run(
-        Some(&w.dir),
+        Some(&w.root),
         [
             "-c",
             "commit.gpgsign=false",
@@ -156,14 +156,14 @@ pub fn run(ctx: &Ctx, args: ExportSourceArgs) -> Result<u8> {
         ],
     );
     if let Err(e) = committed {
-        let _ = git.run(Some(&w.dir), ["checkout", "--quiet", &base]);
-        let _ = git.run(Some(&w.dir), ["branch", "-D", &branch]);
+        let _ = git.run(Some(&w.root), ["checkout", "--quiet", &base]);
+        let _ = git.run(Some(&w.root), ["branch", "-D", &branch]);
         return Err(e).context("committing (is git user.name/user.email set?)");
     }
-    let commit = git.head(&w.dir)?;
+    let commit = git.head(&w.root)?;
     // An explicit refspec to a new `loadout/` branch; never --force.
     git.run(
-        Some(&w.dir),
+        Some(&w.root),
         [
             "push",
             "--quiet",
@@ -176,11 +176,11 @@ pub fn run(ctx: &Ctx, args: ExportSourceArgs) -> Result<u8> {
     report.branch = Some(branch.clone());
     report.commit = Some(commit);
     // Back to the default branch so the next edits start from it.
-    git.run(Some(&w.dir), ["checkout", "--quiet", &base])?;
-    let _ = git.run(Some(&w.dir), ["pull", "--quiet", "--ff-only"]);
+    git.run(Some(&w.root), ["checkout", "--quiet", &base])?;
+    let _ = git.run(Some(&w.root), ["pull", "--quiet", "--ff-only"]);
 
     // The URL as configured (not rewritten by `url.<x>.insteadOf`).
-    let remote = git.run(Some(&w.dir), ["config", "--get", "remote.origin.url"])?;
+    let remote = git.run(Some(&w.root), ["config", "--get", "remote.origin.url"])?;
     match github_repo(remote.trim()) {
         Some((host, owner, repo)) => match open_pr(
             &git,

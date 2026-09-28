@@ -11,6 +11,7 @@ Where the CLI or the file formats use another word, it's in brackets.
 | **Item** | Any of the above. Named `kind/name`; its full id is `source:kind/name`. |
 | **Source** | A Git repo of items, usually one per group, with a `LOADOUT.md` at the top. |
 | **Upstream** | A source that another source builds on. Adding the second gets you the first too. |
+| **Nested source** | A source in a folder of another source's repo, with its own `LOADOUT.md` (listed under `nested:`). It comes with the repo; you get its items if you're in its group. |
 | **Group** | A set of people: the company, an org, a team, a role, just you. |
 | **Layer** | A level of your organization, such as company, org, team, squad or role. The company config names its own layers and ranks them; higher rank = more specific = wins ties. Your personal `user` layer ranks highest unless the company config ranks it itself. |
 | **Your chain** | The groups you're in, from the broadest to you, shown on **Your layers**. |

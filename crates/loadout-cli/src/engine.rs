@@ -165,6 +165,9 @@ pub struct SourceReport {
     /// The source whose `upstream:` pulled this one in.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
+    /// For a nested source: the directory of its `LOADOUT.md` in the repo.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, JsonSchema)]
@@ -432,11 +435,15 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
 
     let source_dirs: BTreeMap<String, std::path::PathBuf> = fetched
         .iter()
-        .map(|f| {
-            (
-                f.scanned.manifest.name.clone(),
-                loadout_git::repo_dir(&ctx.paths.repos_dir(), &normalize_url(&f.sub.url)),
-            )
+        .flat_map(|f| {
+            let repo = loadout_git::repo_dir(&ctx.paths.repos_dir(), &normalize_url(&f.sub.url));
+            let nested: Vec<_> = f
+                .scanned
+                .nested
+                .iter()
+                .map(|n| (n.manifest.name.clone(), crate::work::join(&repo, &n.path)))
+                .collect();
+            std::iter::once((f.scanned.manifest.name.clone(), repo)).chain(nested)
         })
         .collect();
     let loadout_bin = loadout_bin();
@@ -671,28 +678,23 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
     let resolved = Resolved {
         sources: fetched
             .iter()
-            .map(|f| ResolvedSource {
-                name: f.scanned.manifest.name.clone(),
-                url: f.sub.url.clone(),
-                commit: f.commit.clone(),
-                via: f.via.clone(),
-                upstream: f
+            .flat_map(|f| {
+                let nested: Vec<_> = f
                     .scanned
-                    .manifest
-                    .upstream
+                    .nested
                     .iter()
-                    .map(|u| u.resolve(&f.sub.url))
-                    .collect(),
-                layer: f
-                    .sub
-                    .layer
-                    .clone()
-                    .unwrap_or_else(|| f.scanned.manifest.layer.clone()),
-                group: f
-                    .sub
-                    .group
-                    .clone()
-                    .or_else(|| f.scanned.manifest.group.clone()),
+                    .map(|n| ResolvedSource {
+                        name: n.manifest.name.clone(),
+                        url: f.sub.url.clone(),
+                        commit: f.commit.clone(),
+                        via: f.via.clone(),
+                        upstream: Vec::new(),
+                        layer: n.default_layer.clone(),
+                        group: n.default_group.clone(),
+                        path: Some(n.path.clone()),
+                    })
+                    .collect();
+                std::iter::once(root_source(f)).chain(nested)
             })
             .collect(),
         items: overall
@@ -723,6 +725,34 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
     state.save(&ctx.paths.state_file())?;
     report.enabled_items = resolved.items.iter().filter(|i| i.enabled).count();
     Ok(report)
+}
+
+/// A fetched repo's root source, as recorded in `resolved.json`.
+fn root_source(f: &Fetched) -> ResolvedSource {
+    ResolvedSource {
+        name: f.scanned.manifest.name.clone(),
+        url: f.sub.url.clone(),
+        commit: f.commit.clone(),
+        via: f.via.clone(),
+        upstream: f
+            .scanned
+            .manifest
+            .upstream
+            .iter()
+            .map(|u| u.resolve(&f.sub.url))
+            .collect(),
+        layer: f
+            .sub
+            .layer
+            .clone()
+            .unwrap_or_else(|| f.scanned.manifest.layer.clone()),
+        group: f
+            .sub
+            .group
+            .clone()
+            .or_else(|| f.scanned.manifest.group.clone()),
+        path: None,
+    }
 }
 
 /// One enabled target's link plan, computed before anything is placed.
@@ -848,12 +878,14 @@ fn verify_locked(
     Ok(())
 }
 
-/// Two subscriptions whose `LOADOUT.md` share a name would produce colliding
-/// item ids; keep the first (by URL) and warn.
+/// Two sources whose `LOADOUT.md` share a name would produce colliding
+/// item ids; keep the first (by URL) and warn. A repo whose root name is
+/// taken is dropped whole; a nested source whose name is taken is dropped
+/// with its items.
 fn dedupe_sources(fetched: Vec<Fetched>, report: &mut ApplyReport) -> Vec<Fetched> {
     let mut seen: BTreeMap<String, String> = BTreeMap::new();
     let mut out = Vec::new();
-    for f in fetched {
+    for mut f in fetched {
         let name = f.scanned.manifest.name.clone();
         if let Some(first) = seen.get(&name) {
             report.warnings.push(format!(
@@ -863,15 +895,44 @@ fn dedupe_sources(fetched: Vec<Fetched>, report: &mut ApplyReport) -> Vec<Fetche
             continue;
         }
         seen.insert(name.clone(), f.sub.url.clone());
-        report.sources.push(SourceReport {
-            name,
+        let mut dropped = BTreeSet::new();
+        f.scanned.nested.retain(|n| {
+            let nested = &n.manifest.name;
+            if let Some(first) = seen.get(nested) {
+                report.warnings.push(format!(
+                    "sources {first} and {}/{} both call themselves {nested:?}; ignoring the latter",
+                    f.sub.url, n.path
+                ));
+                dropped.insert(nested.clone());
+                return false;
+            }
+            seen.insert(nested.clone(), format!("{}/{}", f.sub.url, n.path));
+            true
+        });
+        f.scanned.items.retain(|i| !dropped.contains(i.id.source()));
+        let count = |source: &str| {
+            f.scanned
+                .items
+                .iter()
+                .filter(|i| i.id.source() == source)
+                .count()
+        };
+        let report_of = |name: &str, path: Option<&str>| SourceReport {
+            name: name.to_owned(),
             url: f.sub.url.clone(),
             commit: f.commit.clone(),
             updated_from: f.updated_from.clone(),
-            items: f.scanned.items.len(),
+            items: count(name),
             cached: f.cached,
             via: f.via.clone(),
-        });
+            path: path.map(str::to_owned),
+        };
+        report.sources.push(report_of(&name, None));
+        for n in &f.scanned.nested {
+            report
+                .sources
+                .push(report_of(&n.manifest.name, Some(&n.path)));
+        }
         out.push(f);
     }
     out

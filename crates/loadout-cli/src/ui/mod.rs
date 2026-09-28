@@ -364,7 +364,9 @@ impl Ui<'_> {
     }
 }
 
-/// Synced sources (with `manual`, `via`, `upstream`) and the company config URL.
+/// Synced sources (with `manual`, `via`, `upstream`, and for nested
+/// sources `path` and `parent`, the repo's root source) and the company
+/// config URL.
 pub fn sources_json(ctx: &Ctx) -> Result<Value> {
     let resolved = crate::state::Resolved::load(&ctx.paths.resolved_file())?;
     let config = ctx.load_config()?;
@@ -373,13 +375,20 @@ pub fn sources_json(ctx: &Ctx) -> Result<Value> {
         .iter()
         .map(|s| loadout_model::config::normalize_url(&s.url))
         .collect();
-    let sources: Vec<Value> = resolved
-        .map(|r| r.sources)
-        .unwrap_or_default()
-        .into_iter()
+    let all = resolved.map(|r| r.sources).unwrap_or_default();
+    let parent_of = |s: &crate::state::ResolvedSource| {
+        s.path.as_ref()?;
+        all.iter()
+            .find(|o| o.path.is_none() && o.url == s.url)
+            .map(|o| o.name.clone())
+    };
+    let sources: Vec<Value> = all
+        .iter()
         .map(|s| {
             let is_manual = manual.contains(&loadout_model::config::normalize_url(&s.url));
             json!({
+                "path": s.path,
+                "parent": parent_of(s),
                 "name": s.name,
                 "url": s.url,
                 "commit": s.commit,

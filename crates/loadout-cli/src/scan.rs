@@ -267,6 +267,21 @@ fn is_real_dir(root: &Path, rel: &str) -> bool {
     })
 }
 
+/// `rel` under `dir` if it's a directory reached without following a
+/// symlink, like `nested:` folders. Anything else found there (a symlink,
+/// a file) is skipped with a warning naming it as `shown`.
+fn item_dir(dir: &Path, rel: &str, shown: &str, warnings: &mut Vec<String>) -> Option<PathBuf> {
+    if is_real_dir(dir, rel) {
+        return Some(join_rel(dir, rel));
+    }
+    if std::fs::symlink_metadata(join_rel(dir, rel)).is_ok() {
+        warnings.push(format!(
+            "{shown}: not a directory in the repo (symlinks aren't followed), skipped"
+        ));
+    }
+    None
+}
+
 /// Joins a `/`-separated relative path onto `root`.
 fn join_rel(root: &Path, rel: &str) -> PathBuf {
     rel.split('/').fold(root.to_path_buf(), |p, c| p.join(c))
@@ -276,11 +291,11 @@ fn join_rel(root: &Path, rel: &str) -> PathBuf {
 /// (`SKILL.md`, `PLUGIN.md`).
 fn scan_dirs(s: &Scope<'_>, out: &mut ScannedSource, kind: ItemKind, marker: &str) -> Result<()> {
     let rel = s.paths.for_kind(kind);
-    let dir = s.dir.join(rel);
-    let rel = format!("{}{rel}", s.prefix);
-    if !dir.is_dir() {
+    let shown = format!("{}{rel}", s.prefix);
+    let Some(dir) = item_dir(s.dir, rel, &shown, &mut out.warnings) else {
         return Ok(());
-    }
+    };
+    let rel = shown;
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
         .with_context(|| format!("reading {}", dir.display()))?
         .collect::<Result<_, _>>()?;
@@ -374,10 +389,10 @@ fn scan_agents(s: &Scope<'_>, out: &mut ScannedSource) -> Result<()> {
 /// Extras: `extras/<type>/<name>.md`, identified as `extra/<type>.<name>`.
 fn scan_extras(s: &Scope<'_>, out: &mut ScannedSource) -> Result<()> {
     let rel = s.paths.for_kind(ItemKind::Extra);
-    let dir = s.dir.join(rel);
-    if !dir.is_dir() {
+    let shown = format!("{}{rel}", s.prefix);
+    let Some(dir) = item_dir(s.dir, rel, &shown, &mut out.warnings) else {
         return Ok(());
-    }
+    };
     let mut types: Vec<_> = std::fs::read_dir(&dir)
         .with_context(|| format!("reading {}", dir.display()))?
         .collect::<Result<_, _>>()?;
@@ -410,11 +425,11 @@ fn scan_md_dir(
     out: &mut ScannedSource,
     key_of: impl Fn(&str) -> Result<(ItemKey, String)>,
 ) -> Result<()> {
-    let dir = s.dir.join(rel);
-    let rel = format!("{}{rel}", s.prefix);
-    if !dir.is_dir() {
+    let shown = format!("{}{rel}", s.prefix);
+    let Some(dir) = item_dir(s.dir, rel, &shown, &mut out.warnings) else {
         return Ok(());
-    }
+    };
+    let rel = shown;
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
         .with_context(|| format!("reading {}", dir.display()))?
         .collect::<Result<_, _>>()?;
@@ -896,6 +911,33 @@ mod tests {
                 .any(|w| w.contains("symlinks aren't followed"))
         );
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn item_dirs_do_not_follow_symlinks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (r, outside) = (tmp.path().join("repo"), tmp.path().join("outside"));
+        write(&r, "LOADOUT.md", MANIFEST);
+        write(&outside, "skills/x/SKILL.md", "---\n---\n");
+        write(&outside, "plugins/x/PLUGIN.md", "---\n---\n");
+        write(&outside, "mcp/x.md", "---\ncommand: x\n---\n");
+        write(&outside, "agents/x.md", "---\n---\n");
+        write(&outside, "extras/rules/x.md", "---\n---\n");
+        write(&outside, "templates/x/SKILL.md", "---\n---\n");
+        let dirs = ["skills", "plugins", "mcp", "agents", "extras", "templates"];
+        for d in dirs {
+            std::os::unix::fs::symlink(outside.join(d), r.join(d)).unwrap();
+        }
+        let s = scan_source(&r).unwrap();
+        assert!(s.items.is_empty(), "{:?}", s.items);
+        let (templates, template_warnings) = scan_templates(&r).unwrap();
+        assert!(templates.is_empty());
+        let warnings = [s.warnings, template_warnings].concat();
+        for d in dirs {
+            let msg = format!("{d}: not a directory in the repo (symlinks aren't followed)");
+            assert!(warnings.iter().any(|w| w.contains(&msg)), "{warnings:?}");
+        }
+    }
 }
 
 /// A template found in a source.
@@ -919,12 +961,11 @@ pub fn scan_templates(root: &Path) -> Result<(Vec<ScannedTemplate>, Vec<String>)
         .with_context(|| format!("source has no readable {MANIFEST_FILE} at its root"))?;
     let manifest = ManifestDoc::parse(&text)?.manifest;
     let rel = manifest.paths.templates().to_owned();
-    let dir = root.join(&rel);
     let mut out = Vec::new();
     let mut warnings = Vec::new();
-    if !dir.is_dir() {
+    let Some(dir) = item_dir(root, &rel, &rel, &mut warnings) else {
         return Ok((out, warnings));
-    }
+    };
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
         .with_context(|| format!("reading {}", dir.display()))?
         .collect::<Result<_, _>>()?;

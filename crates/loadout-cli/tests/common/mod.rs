@@ -57,6 +57,10 @@ impl Sandbox {
 
     pub fn cmd(&self) -> Command {
         let mut cmd = Command::cargo_bin("lo").unwrap();
+        // Run from the sandbox, not the checkout: git reads the repo's own
+        // `.git/config` from the working directory, so a developer's local
+        // `user.name` would otherwise leak into `whoami` and commits.
+        cmd.current_dir(&self.home);
         cmd.env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("LOADOUT_HOME", &self.home)

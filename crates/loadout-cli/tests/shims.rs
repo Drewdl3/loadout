@@ -29,7 +29,7 @@ fn shell(s: &Sandbox, command: &str) -> std::process::Output {
         c.arg("-c").arg(command);
         c
     };
-    cmd.env_clear();
+    cmd.current_dir(&s.home).env_clear();
     for (k, v) in s.cmd().get_envs() {
         if let Some(v) = v {
             cmd.env(k, v);

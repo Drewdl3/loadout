@@ -37,7 +37,7 @@ impl Ui {
 
     fn start_env(s: &Sandbox, api: &str, env: &[(&str, &str)]) -> Ui {
         let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin("lo"));
-        cmd.env_clear();
+        cmd.current_dir(&s.home).env_clear();
         for (k, v) in s.cmd().get_envs() {
             if let Some(v) = v {
                 cmd.env(k, v);

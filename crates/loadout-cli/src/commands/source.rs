@@ -10,7 +10,6 @@ use std::fmt::Write as _;
 
 use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
-use loadout_git::Git;
 use loadout_model::config::normalize_url;
 use loadout_model::{SourceEdit, SourceSub};
 use schemars::JsonSchema;
@@ -219,18 +218,10 @@ fn check(ctx: &Ctx, url: &str, edit: &SourceEdit) -> Result<()> {
         }
     }
     let config = ctx.load_config()?;
-    let Some(company_url) = config
-        .company_config
-        .clone()
-        .filter(|_| ctx.paths.project.is_none())
-    else {
+    let Some(c) = membership::current_company_config(ctx, &config) else {
         return Ok(());
     };
-    let Ok(c) = membership::load_company_config(ctx, &Git::new(), &company_url, false) else {
-        return Ok(());
-    };
-    let listed =
-        c.company_config.lists_source(url) || normalize_url(url) == normalize_url(&company_url);
+    let listed = c.lists_or_is(url);
     let reranks = matches!(edit.layer, Some(Some(_))) || matches!(edit.rank, Some(Some(_)));
     if listed && reranks && !c.company_config.policy.allow_local_ranks {
         bail!("the company config doesn't allow re-ranking the sources it lists ({url})");

@@ -130,15 +130,6 @@ impl LayerModel {
         );
     }
 
-    /// Adds the `user` layer above every other one, unless it's defined.
-    pub fn with_user_layer(mut self) -> Self {
-        if !self.ranks.contains_key(USER_LAYER) {
-            let top = self.ranks.values().map(|l| l.rank).max().unwrap_or(0);
-            self.declare(USER_LAYER, top + 10, RankOrigin::Default);
-        }
-        self
-    }
-
     pub fn rank(&self, layer: &str) -> Option<i64> {
         self.ranks.get(layer).map(|l| l.rank)
     }
@@ -228,10 +219,6 @@ mod tests {
         assert_eq!(m.rank("project"), Some(35));
         assert_eq!(m.rank("user"), Some(50));
         assert_eq!(m.rank("chapter"), None);
-        let company_config = LayerModel::new([("company", 0), ("team", 70)]).with_user_layer();
-        assert_eq!(company_config.rank("user"), Some(80));
-        let own = LayerModel::new([("company", 0), ("user", 5)]).with_user_layer();
-        assert_eq!(own.rank("user"), Some(5));
     }
 
     #[test]

@@ -758,7 +758,7 @@ fn start_your_own_source_from_the_ui() {
     );
     assert_eq!(status, 200, "{v}");
     assert_eq!(v["code"], 0, "{v}");
-    let dir = s.home.join("loadout/beta-skills");
+    let dir = s.home.join("loadout").join("beta-skills");
     assert_eq!(
         v["output"]["created"]["dir"],
         dir.to_string_lossy().as_ref()

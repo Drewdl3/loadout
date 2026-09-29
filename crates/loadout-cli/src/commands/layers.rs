@@ -5,7 +5,6 @@ use std::fmt::Write as _;
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Subcommand};
-use loadout_git::Git;
 use loadout_model::RankOrigin;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -173,13 +172,7 @@ fn parse_pair(p: &str) -> Result<(String, i64)> {
 /// it (`policy.allow_local_ranks: false`).
 fn check_policy<'a>(ctx: &Ctx, names: impl Iterator<Item = &'a str>) -> Result<()> {
     let config = ctx.load_config()?;
-    let Some(url) = config
-        .company_config
-        .filter(|_| ctx.paths.project.is_none())
-    else {
-        return Ok(());
-    };
-    let Ok(c) = membership::load_company_config(ctx, &Git::new(), &url, false) else {
+    let Some(c) = membership::current_company_config(ctx, &config) else {
         return Ok(());
     };
     let c = c.company_config;

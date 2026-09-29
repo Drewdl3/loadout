@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use loadout_core::layers::{Inputs, merge};
-use loadout_git::Git;
 use loadout_model::{CompanyConfig, Config, Layer, LayerModel};
 
 use crate::ctx::Ctx;
@@ -46,15 +45,7 @@ pub fn model(
 /// checkout, and the sources of the last sync.
 pub fn current(ctx: &Ctx) -> Result<(LayerModel, Vec<String>)> {
     let config = ctx.load_config()?;
-    let company = match &config.company_config {
-        // A project layer has its own sources only.
-        Some(url) if ctx.paths.project.is_none() => {
-            membership::load_company_config(ctx, &Git::new(), url, false)
-                .ok()
-                .map(|c| c.company_config)
-        }
-        _ => None,
-    };
+    let company = membership::current_company_config(ctx, &config).map(|c| c.company_config);
     let suggestions = Resolved::load(&ctx.paths.resolved_file())?
         .map(|r| r.layer_suggestions)
         .unwrap_or_default();

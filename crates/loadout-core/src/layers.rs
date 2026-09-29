@@ -7,6 +7,8 @@
 use std::collections::BTreeMap;
 
 use loadout_model::layer::{DEFAULT_LAYERS, USER_LAYER};
+
+const COMPANY_LAYER: &str = "company";
 use loadout_model::{Layer, LayerModel, RankOrigin};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -38,6 +40,14 @@ pub enum Warning {
     /// `config.toml` re-ranks a company config layer, which its policy
     /// forbids; ignored.
     LocalRankForbidden { layer: String },
+    /// A source suggested a rank for `company`, or one at or below it;
+    /// only the defaults and the company config rank the broadest layer.
+    SourceRankTooLow {
+        source: String,
+        layer: String,
+        suggested: i64,
+        used: Option<i64>,
+    },
 }
 
 impl std::fmt::Display for Warning {
@@ -59,6 +69,21 @@ impl std::fmt::Display for Warning {
                     all.join(", ")
                 )
             }
+            Warning::SourceRankTooLow {
+                source,
+                layer,
+                suggested,
+                used: Some(used),
+            } => write!(
+                f,
+                "{source} suggests rank {suggested} for layer {layer:?}, at or below `company`; \
+                 using {used}. Only the company config ranks layers that broad"
+            ),
+            Warning::SourceRankTooLow { source, layer, .. } => write!(
+                f,
+                "{source} suggests a rank for layer {layer:?}; only the defaults and the \
+                 company config rank it, so it's ignored"
+            ),
             Warning::LocalRankForbidden { layer } => write!(
                 f,
                 "your config.toml ranks layer {layer:?}, but the company config doesn't allow \
@@ -86,15 +111,41 @@ pub fn merge(inputs: &Inputs<'_>) -> (LayerModel, Vec<Warning>) {
             .filter(|(n, _)| *n != USER_LAYER),
     );
 
+    // Sources can't rank anything at or below `company`: a suggested rank
+    // is also where its locks hold, and a source mustn't out-lock the
+    // company.
+    let floor = inputs
+        .company
+        .and_then(|c| c.iter().find(|l| l.name == COMPANY_LAYER))
+        .map_or_else(|| model.rank(COMPANY_LAYER).unwrap_or(0), |l| l.rank);
     // Every suggestion per layer, sorted so the pick doesn't depend on the
     // order the sources came in.
     let mut suggested: BTreeMap<&str, Vec<(&str, i64)>> = BTreeMap::new();
     for (source, layers) in inputs.sources {
         for l in layers {
+            let rank = if l.name == COMPANY_LAYER {
+                warnings.push(Warning::SourceRankTooLow {
+                    source: source.clone(),
+                    layer: l.name.clone(),
+                    suggested: l.rank,
+                    used: None,
+                });
+                continue;
+            } else if l.rank <= floor {
+                warnings.push(Warning::SourceRankTooLow {
+                    source: source.clone(),
+                    layer: l.name.clone(),
+                    suggested: l.rank,
+                    used: Some(floor + 1),
+                });
+                floor + 1
+            } else {
+                l.rank
+            };
             suggested
                 .entry(l.name.as_str())
                 .or_default()
-                .push((source.as_str(), l.rank));
+                .push((source.as_str(), rank));
         }
     }
     for (layer, mut all) in suggested {
@@ -222,6 +273,24 @@ mod tests {
                 used: 31,
             }]
         );
+    }
+
+    #[test]
+    fn sources_cannot_rank_at_or_below_company() {
+        let sources = [(
+            "sneaky".to_owned(),
+            vec![layer("company", 50), layer("sneaky", -5), layer("team", 0)],
+        )];
+        let (m, w) = run(&sources, None, &[]);
+        assert_eq!(m.rank("company"), Some(0));
+        assert_eq!(m.rank("sneaky"), Some(1));
+        assert_eq!(m.declared_rank("sneaky"), Some(1));
+        assert_eq!(m.rank("team"), Some(1));
+        assert_eq!(w.len(), 3, "{w:?}");
+        // With a company config, its own `company` rank is the floor.
+        let company = [layer("company", -100)];
+        let (m, _) = run(&sources, Some(&company), &[]);
+        assert_eq!(m.rank("sneaky"), Some(-5));
     }
 
     #[test]

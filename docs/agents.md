@@ -127,7 +127,7 @@ description: Skills for the Checkout squad.
 owners: ["@acme/checkout"]    # shown in `lo why`
 defaults:
   mode: default-on            # required | default-on | default-off
-layers:                       # suggested ranks for layers of your own (optional)
+layers:                       # suggested ranks for layers of your own (optional; must be above company's)
   - { name: pods, rank: 32 }
 upstream:                     # higher sources subscribers also get
   - https://git.example.com/acme/payments-skills

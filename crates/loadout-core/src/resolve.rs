@@ -501,7 +501,7 @@ fn pick_winner<'c>(
             let by = winner.id.clone();
             losers.push((
                 &e.c.id,
-                if e.lock_rank >= min_rank {
+                if e.lock_rank > min_rank {
                     Outcome::BlockedOverride { by }
                 } else {
                     Outcome::LostToLocked { by }

@@ -77,7 +77,8 @@ The ranks in effect merge, later steps winning:
 
 1. the built-in defaults,
 2. the `layers:` of the sources you're subscribed to (if two disagree, the
-   higher rank is used and `lo sync` warns),
+   higher rank is used and `lo sync` warns; a source can't rank `company`,
+   or anything at or below it, so its locks can never beat the company's),
 3. the company config's `company.layers`, if there is one,
 4. your own `[layers]` in `config.toml` (`lo layers set beta=27`).
 

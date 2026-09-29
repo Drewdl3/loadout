@@ -136,7 +136,8 @@ Each layer's rank is merged from, later ones winning:
    25, `squad` 30, `project` 35, `role` 40, `user` 50);
 2. the `layers:` of your sources' `LOADOUT.md` files, so a team can bring
    a layer of its own, like `{ name: beta, rank: 27 }` (if two sources
-   disagree, the higher rank is used, with a warning);
+   disagree, the higher rank is used, with a warning; sources can't rank
+   `company` or anything at or below it);
 3. the company config's layers, if you have one;
 4. your own `[layers]` in `config.toml`.
 

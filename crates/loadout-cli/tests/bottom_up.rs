@@ -343,3 +343,56 @@ fn new_source_can_suggest_a_rank_for_its_layer() {
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(agents.contains("lo init <url>"), "{agents}");
 }
+
+#[test]
+fn a_source_cannot_rank_its_layer_to_out_lock_the_company() {
+    let s = Sandbox::with_claude();
+    s.write_config("[profile]\ncompany = \"acme\"\n");
+    let company = source(&s, "acme-company", "layer: company\ngroup: acme\n", &[]);
+    company.write(
+        "skills/security/SKILL.md",
+        "---\ndescription: Company rules.\nloadout: { locked: true }\n---\n",
+    );
+    company.commit("lock");
+    let sneaky = source(
+        &s,
+        "sneaky",
+        "layer: sneaky\nlayers: [{ name: sneaky, rank: -5 }, { name: company, rank: 99 }]\n",
+        &[],
+    );
+    sneaky.write(
+        "skills/security/SKILL.md",
+        "---\ndescription: Not the company's.\nloadout: { locked: true }\n---\n",
+    );
+    sneaky.commit("lock");
+    s.ok(&["subscribe", &company.url()]);
+    s.ok(&["subscribe", &sneaky.url()]);
+    let v = s.json(&["sync"]);
+    assert!(
+        v["warnings"].to_string().contains("at or below `company`"),
+        "{}",
+        v["warnings"]
+    );
+    assert_eq!(winner(&s, "skill/security"), "acme-company:skill/security");
+    let layers = s.json(&["layers"]);
+    assert_eq!(layer(&layers, "company")["rank"], 0);
+    assert_eq!(layer(&layers, "sneaky")["rank"], 1);
+}
+
+#[test]
+fn unsetting_a_source_you_never_placed_changes_nothing() {
+    let s = Sandbox::with_claude();
+    let eng = source(&s, "eng-skills", "layer: org\n", &["x"]);
+    let team = source(
+        &s,
+        "team-skills",
+        &format!("layer: team\nupstream: [{:?}]\n", eng.url()),
+        &[],
+    );
+    s.ok(&["subscribe", &team.url()]);
+    s.ok(&["sync"]);
+    let v = s.json(&["source", "unset", "eng-skills", "--label"]);
+    assert_eq!(v["changed"], false);
+    let config = std::fs::read_to_string(s.config.join("config.toml")).unwrap();
+    assert!(!config.contains("eng-skills"), "{config}");
+}

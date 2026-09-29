@@ -30,7 +30,8 @@ pub struct Manifest {
     /// Suggested ranks for layers this source uses, e.g. its own
     /// `{ name: beta, rank: 27 }`. The company config's layers and your
     /// `config.toml` override them; when two sources disagree, the higher
-    /// rank is used.
+    /// rank is used. Sources can't rank `company`, or anything at or below
+    /// it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub layers: Vec<Layer>,
     /// Default group. Required unless the company config maps this source to a group.

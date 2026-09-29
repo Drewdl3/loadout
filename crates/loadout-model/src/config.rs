@@ -245,6 +245,14 @@ impl SourceEdit {
     pub fn is_empty(&self) -> bool {
         self == &SourceEdit::default()
     }
+
+    /// Whether it sets (not only removes) a field.
+    pub fn sets_anything(&self) -> bool {
+        matches!(self.label, Some(Some(_)))
+            || matches!(self.layer, Some(Some(_)))
+            || matches!(self.rank, Some(Some(_)))
+            || matches!(self.priority, Some(Some(_)))
+    }
 }
 
 /// How items are placed into a target directory.
@@ -355,14 +363,19 @@ impl ConfigDoc {
 
     /// Changes the `[[source]]` for `url` (adding one if there is none).
     /// Returns whether anything changed.
+    /// Only removing fields never adds an entry.
     pub fn edit_source(&mut self, url: &str, edit: &SourceEdit) -> bool {
         let before = self.doc.to_string();
         if self.config().source(url).is_none() {
+            if !edit.sets_anything() {
+                return false;
+            }
             self.add_source(&SourceSub::new(url));
         }
+        self.source_tables();
         let norm = normalize_url(url);
         let Some(Item::ArrayOfTables(a)) = self.doc.get_mut("source") else {
-            unreachable!("added above");
+            unreachable!("source_tables() made it an array of tables");
         };
         let t = a
             .iter_mut()
@@ -389,6 +402,20 @@ impl ConfigDoc {
             edit.priority.map(|v| v.filter(|p| *p != 0).map(Into::into)),
         );
         before != self.doc.to_string()
+    }
+
+    /// Rewrites `source = [{ … }]` (an inline array) as `[[source]]`
+    /// tables so entries can be edited in place.
+    fn source_tables(&mut self) {
+        if let Some(Item::Value(toml_edit::Value::Array(arr))) = self.doc.get("source") {
+            let mut tables = ArrayOfTables::new();
+            for v in arr.iter() {
+                if let toml_edit::Value::InlineTable(t) = v {
+                    tables.push(t.clone().into_table());
+                }
+            }
+            self.doc.insert("source", Item::ArrayOfTables(tables));
+        }
     }
 
     /// Sets `[layers] <name> = <rank>`.
@@ -763,6 +790,28 @@ link_mode = "symlink"
             }
         ));
         assert_eq!(doc.config().sources.len(), 2);
+
+        // Only removing fields from a URL without an entry adds nothing.
+        assert!(!doc.edit_source(
+            "https://example.com/acme/upstream-only",
+            &SourceEdit {
+                label: Some(None),
+                ..SourceEdit::default()
+            }
+        ));
+        assert_eq!(doc.config().sources.len(), 2);
+
+        // An inline `source = [...]` array is edited too.
+        let mut inline =
+            ConfigDoc::parse("source = [{ url = \"https://example.com/a\" }]\n").unwrap();
+        assert!(inline.edit_source(
+            "https://example.com/a",
+            &SourceEdit {
+                rank: Some(Some(3)),
+                ..SourceEdit::default()
+            }
+        ));
+        assert_eq!(inline.config().sources[0].rank, Some(3));
 
         assert!(doc.unset_layer("beta"));
         assert!(!doc.unset_layer("beta"));

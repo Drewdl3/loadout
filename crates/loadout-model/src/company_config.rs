@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::ModelError;
 use crate::config::normalize_url;
-use crate::layer::{Layer, LayerModel, RankOrigin};
+use crate::layer::Layer;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -217,16 +217,6 @@ impl CompanyConfig {
         Ok(())
     }
 
-    /// The company config's layers, plus `user` above them all unless the
-    /// company config ranks it itself.
-    pub fn layer_model(&self) -> LayerModel {
-        let mut m = LayerModel::new([]);
-        for l in &self.layers {
-            m.declare(&l.name, l.rank, RankOrigin::CompanyConfig);
-        }
-        m.with_user_layer()
-    }
-
     pub fn group(&self, layer: &str, name: &str) -> Option<&GroupDef> {
         self.groups
             .iter()
@@ -299,7 +289,7 @@ company:
     fn parses_example() {
         let c = parse(EXAMPLE_COMPANY).unwrap();
         assert_eq!(c.name, "acme");
-        assert_eq!(c.layer_model().rank("role"), Some(40));
+        assert!(c.layers.iter().any(|l| l.name == "role" && l.rank == 40));
         assert_eq!(c.groups.len(), 5);
         let pay = c.group("team", "payments-dev").unwrap();
         assert_eq!(

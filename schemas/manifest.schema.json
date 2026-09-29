@@ -20,7 +20,7 @@
       "type": "string"
     },
     "layers": {
-      "description": "Suggested ranks for layers this source uses, e.g. its own\n`{ name: beta, rank: 27 }`. The company config's layers and your\n`config.toml` override them; when two sources disagree, the higher\nrank is used.",
+      "description": "Suggested ranks for layers this source uses, e.g. its own\n`{ name: beta, rank: 27 }`. The company config's layers and your\n`config.toml` override them; when two sources disagree, the higher\nrank is used. Sources can't rank `company`, or anything at or below\nit.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/Layer"

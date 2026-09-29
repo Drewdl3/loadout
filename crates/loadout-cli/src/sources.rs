@@ -192,8 +192,7 @@ fn allowed_placement(
     let Some(c) = company_config else {
         return placement;
     };
-    let listed = c.company_config.lists_source(url) || normalize_url(url) == normalize_url(&c.url);
-    if placement.is_some() && listed && !c.company_config.policy.allow_local_ranks {
+    if placement.is_some() && c.lists_or_is(url) && !c.company_config.policy.allow_local_ranks {
         warnings.push(format!(
             "{url}: the company config doesn't allow re-ranking the sources it lists; its layer and rank are kept"
         ));
@@ -390,7 +389,8 @@ pub fn load_upstreams(
     fill_from_upstream_entries(loaded, company_config);
 }
 
-/// A source you subscribed to yourself that another loaded source also
+/// A source you subscribed to yourself (not one the company config lists)
+/// that another loaded source also
 /// names as `upstream:` takes that entry's label, layer, rank and priority
 /// for whatever your own `[[source]]` doesn't set: labelling an upstream
 /// shouldn't drop the rank its downstream gave it.
@@ -406,7 +406,11 @@ fn fill_from_upstream_entries(loaded: &mut Loaded, company_config: Option<&Loade
         }
     }
     let mut warnings = Vec::new();
-    for f in loaded.sources.iter_mut().filter(|f| f.via.is_none()) {
+    for f in loaded
+        .sources
+        .iter_mut()
+        .filter(|f| f.manual && f.via.is_none())
+    {
         let Some((up, from)) = entries.get(&normalize_url(&f.sub.url)) else {
             continue;
         };

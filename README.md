@@ -8,17 +8,21 @@
 # Loadout
 
 **Loadout** (`lo`) distributes AI-agent configuration (skills, MCP
-servers, subagents, plugins and rules) across a company from federated Git
-repos. Each team, org, product or role owns its own repo. Each person gets
-the right combination for who they are, installed into every AI tool they use
+servers, subagents, plugins and rules) from federated Git repos. It starts
+with one team: each team, org, product or role owns its own repo, and repos
+build on each other. Each person gets the right combination for who they
+are, installed into every AI tool they use
 (Claude Code, Pi, Codex, Cursor, OpenCode, IBM Bob, or any tool you
 describe in a small TOML file) in that tool's own format.
 
-- **One command to set up:** `lo init <company-config-url>` works out which groups
-  you belong to (GitHub/GitLab teams, env, your IdP via a script, or opt-in)
-  and installs their items.
+- **One command to set up:** `lo init <link>` connects you to your team's
+  repo and the repos it builds on. Later, an optional company config can
+  work out everyone's groups (GitHub/GitLab teams, env, your IdP via a
+  script, or opt-in).
 - **Layered and explainable:** the most specific layer wins unless a more
-  general one locks an item. `lo why` shows the reasoning.
+  general one locks an item. Teams can name their own layers, and each
+  person can re-rank layers and sources for themselves; locks hold anyway.
+  `lo why` shows the reasoning.
 - **Safe updates:** every source is pinned by commit in `loadout.lock`. Changes
   are audited and wait for your review unless the company config auto-applies them.
 - **No secrets in repos:** MCP configs hold references like
@@ -35,7 +39,7 @@ describe in a small TOML file) in that tool's own format.
 > step: [getting started](docs/wiki/Getting-Started.md),
 > [how layers work](docs/wiki/How-Layers-Work.md), [the web UI](docs/wiki/Using-the-Web-UI.md),
 > [sharing skills](docs/wiki/Sharing-Skills.md) and
-> [setting up a company](docs/wiki/Setting-Up-Your-Company.md).
+> [growing across your org](docs/wiki/Growing-Across-Your-Org.md).
 
 ## Install
 
@@ -43,8 +47,8 @@ Linux and macOS (x64 and arm64; checksum-verified against the release's `SHA256S
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Drewdl3/loadout/main/install.sh | sh
-# …and go straight into setup:
-curl -fsSL https://raw.githubusercontent.com/Drewdl3/loadout/main/install.sh | sh -s -- --company-config https://git.example.com/acme/agent-config
+# …and go straight into setup with a link someone shared:
+curl -fsSL https://raw.githubusercontent.com/Drewdl3/loadout/main/install.sh | sh -s -- --connect https://git.example.com/acme/payments-skills
 ```
 
 Windows (x64, PowerShell):
@@ -65,32 +69,24 @@ each GitHub Release. Update later with `lo self-update`. You need `git` on
 
 ## Quickstart
 
-**As a developer at a company with a company config:**
+**Start from your team's repo.** Someone shared a link to it:
 
 ```sh
-lo init https://git.example.com/acme/agent-config   # discover groups, pick tools, first sync
-lo profile                    # which groups you're in, and why
+lo init https://git.example.com/acme/payments-skills   # preview it and what it builds on, subscribe, pick tools, sync
 lo list                       # what's installed
 lo why skill/write-spec       # which source won, and why
-lo join product:billing       # opt into a group
 lo tui                        # or browse, filter and toggle in the terminal
 lo ui                         # …or in a local web dashboard
 ```
 
-**Without a company config:** subscribe to sources directly.
+The link can also be a company config; `lo init` sees which it is.
+
+**No link yet? Start your own**, for your team or just for you:
 
 ```sh
-lo subscribe https://git.example.com/acme/payments-skills   # any Git URL or local path
-lo sync
-```
-
-**As a team publishing skills, or for your own:**
-
-```sh
-lo init                        # in a terminal: pick "join", "create a source", "personal source" or "company config"
-lo init --new-source payments-skills --layer team --group payments-dev --upstream https://git.example.com/acme/eng-skills
+lo init                        # in a terminal: pick "team source", "personal source", "connect" or "company config"
+lo init --new-source payments-skills --layer team --group payments-dev --upstream https://git.example.com/acme/eng-skills --subscribe
 lo init --new-source my-skills --layer user --upstream https://git.example.com/acme/payments-skills --subscribe
-lo init --new-company acme-config --company acme --git-init
 ```
 
 `--new-source` (alias `--catalog`) scaffolds a source repo: a `LOADOUT.md`,
@@ -99,24 +95,46 @@ scaffold, and `--subscribe` also subscribes you to it so you can try it
 straight away. A **personal source** (`--layer user`) is your own layer. It
 outranks every other layer, so your versions of unlocked items win, and
 through `upstream:` it pulls in your team's layers. Add items, push, and
-list the repo in the company config (or have people `lo subscribe` to it).
+share the link: people connect with `lo init <link>`.
+
+**Make things rank your way:**
+
+```sh
+lo subscribe https://git.example.com/acme/beta-skills --label "Beta" --rank 27
+lo layers                      # every layer's rank and where it came from
+lo layers set beta=27          # re-rank a layer for yourself
+lo source set eng-skills --rank 25   # …or one source (upstreams and company-listed ones too)
+```
+
+**Later, across the org:** a company config lists groups, their repos and
+who belongs to each, so people's groups are worked out for them:
+
+```sh
+lo init --new-company acme-config --company acme --git-init
+lo init https://git.example.com/acme/agent-config   # people connect to it on top of what they have
+lo profile                    # which groups you're in, and why
+lo join product:billing       # opt into a group
+```
 
 [`examples/`](examples/README.md) has a complete setup for a fictional
 company (a company config plus org, team, product and role repos) and a script that
 tries it in a throwaway sandbox. **[`docs/onboarding.md`](docs/onboarding.md)**
-walks through onboarding end to end: a new squad builds its catalog from a
-template and registers it, and a new developer joins and adds a personal
-layer. `examples/onboard.sh` runs all of it.
+walks through onboarding end to end, bottom-up: a squad builds its catalog
+on its team's source, a new developer connects with the squad's link and
+adds a personal layer, and a company config arrives later.
+`examples/onboard.sh` runs all of it.
 
 ## How it works
 
 Think of Loadout as layers of shared instructions for AI assistants:
 
-1. **Each group keeps its skills in a Git repo** (a *source*): the whole
-   company, Engineering, the Payments team, product managers, and, if you
-   like, you.
-2. **Loadout works out which groups you're in** (from GitHub/GitLab
-   teams, your SSO, or because you joined) and only uses those repos.
+1. **Each group keeps its skills in a Git repo** (a *source*): the Payments
+   team, Engineering, product managers, the whole company, and, if you
+   like, you. Repos build on each other with `upstream:`.
+2. **You connect to the repos you need**, usually just your team's
+   (`lo init <link>`), and get the ones it builds on. An optional company
+   config can work out your groups instead (from GitHub/GitLab teams, your
+   SSO, or because you joined).
 3. **`lo sync` installs the result into every AI tool you use**, in each
    tool's own format.
 
@@ -149,10 +167,11 @@ company → org → team → squad → you. Engineering and Payments both publis
 an item (say, the company's security rules) so nobody below replaces it or
 turns it off. `lo why skill/write-spec` shows which layer won and why.
 
-Two more pieces, both optional: a **company config** repo lists the groups, their
-repos and who belongs to each (without one, you subscribe to repos
-directly), and a repo can **build on** another with `upstream:` (the
-Checkout squad's repo pulls in Payments').
+A repo can **build on** another with `upstream:` (the Checkout squad's repo
+pulls in Payments', which pulls in Engineering's), so one link gets you the
+whole chain. Optionally, a **company config** repo lists the groups, their
+repos and who belongs to each; without one, people connect to repos
+directly.
 
 A **source** is a Git repo with a `LOADOUT.md` manifest at its root and items in
 conventional directories:
@@ -177,13 +196,40 @@ group: payments-dev
 # Payments team skills
 ```
 
-The **company config** is the company's root source. Its `LOADOUT.md` also lists the
+**Layers** rank sources: when two provide the same item, the higher rank
+wins unless a lower one locks it. The ranks merge from, later winning:
+built-in defaults (`company` 0, `org` 10, `team` 20, `product` 25, `squad`
+30, `project` 35, `role` 40, `user` 50); the `layers:` of your sources'
+`LOADOUT.md`, so a team can bring its own (`layers: [{ name: beta, rank: 27 }]`;
+if sources disagree, the highest wins with a warning); the company config's
+`company.layers`; and your own `[layers]` in `config.toml`. `lo layers`
+shows each rank and where it came from.
+
+**Placing a source.** Each subscriber decides where a source sits for them,
+in its `[[source]]` entry (or with `lo source set`):
+
+```toml
+[[source]]
+url = "https://git.example.com/acme/beta-skills"
+label = "Beta (payments)"   # display name everywhere (lo why, lo list, lo ui)
+layer = "product"           # rank every item at this layer, item-level layer: included
+rank = 27                   # or exactly this rank
+priority = 10               # tie-break within a rank
+```
+
+This works for upstreams and company-listed sources too, and an `upstream:`
+entry can set the same fields for the source's subscribers (yours win).
+**Locks don't move:** they're compared at the rank each source *declared*,
+so no re-rank lets anyone replace a locked item, or makes a random source's
+lock beat the company's. A company config can forbid re-ranking its layers
+and sources with `policy.allow_local_ranks: false`.
+
+The optional **company config** is a source whose `LOADOUT.md` also lists
 layers and their ranks, every group with its repos, how membership is
-discovered, and policy. Layer names and ranks are yours to choose (they must
-include `company`): `lo init --new-company acme-config --company acme
+discovered, and policy. Its layer names and ranks are yours to choose (they
+must include `company`): `lo init --new-company acme-config --company acme
 --layers company=0,division=10,chapter=15,team=20,user=50`, or edit
-`company.layers` later. When two layers provide the same item, the higher rank
-wins unless a lower one locks it.
+`company.layers` later.
 
 | Membership rule | You're a member when |
 |---|---|
@@ -208,6 +254,7 @@ layers just by pointing at them:
 upstream:
   - https://git.example.com/acme/eng-skills          # absolute
   - { url: ../payments-skills, ref: stable }         # relative to this repo's URL, like a Git submodule
+  - { url: ../beta-skills, label: Beta, rank: 27 }   # placed for this source's subscribers
 ```
 
 Upstreams are followed transitively (cycle-safe, up to 8 levels), pinned in
@@ -267,10 +314,12 @@ like any other.
 
 **Resolution.** Every item has a layer (`company`, `org`, `team`,
 `product`, `squad`, `project`, `role`, `user` and so on) and a group, taken from the
-item's `loadout:` block or its repo's `LOADOUT.md`. You receive an item if you
+item's `loadout:` block or its repo's `LOADOUT.md`; its rank is its layer's,
+unless its source was placed elsewhere. You receive an item if you
 belong to its group and its `applies_to` filter matches you. When several
 sources provide the same `kind/name`, the most specific layer wins, unless a
-more general one marks it `locked: true` or `overridable: false`. If two
+more general one marks it `locked: true` or `overridable: false` (compared at
+declared ranks). If two
 sources tie at the same rank, that's a conflict; settle it with
 `lo prefer`. Items can be `required`, `default-on` or `default-off`, and
 you can toggle anything that isn't required or locked.
@@ -374,13 +423,15 @@ Exit codes: `0` ok, `1` error, `2` changes pending review, `3` audit blocked,
 
 | Command | |
 |---|---|
-| `lo init <company-config-url> [--non-interactive]` | Fetch the company config, discover your groups, pick tools, first sync. |
-| `lo init --new-source [dir] [--layer s] [--group u] [--upstream url]... [--git-init] [--subscribe]` | Create a source (catalog). `lo new-source` does the same without the Git steps. |
+| `lo init <url> [--non-interactive]` | Connect to a link someone shared. A source: preview it and its upstreams, subscribe, pick tools, first sync. A company config: discover your groups, pick tools, first sync. `--json` says which (`kind: source \| company_config`). |
+| `lo init --new-source [dir] [--layer s] [--rank n] [--group u] [--upstream url]... [--git-init] [--subscribe]` | Create a source (catalog). `--rank` suggests a rank for a layer of your own. `lo new-source` does the same without the Git steps. |
 | `lo init --new-company [dir] --company c [--layers name=rank,…] [--git-init]` | Create a company config, optionally with your own layer names and ranks. |
 | `lo init --project` | Set up a project layer in the current repo. |
 | `lo profile [show\|refresh\|set <layer> <group>...]` | Your groups and how each was decided; re-run discovery; override a layer. |
 | `lo join <layer>:<group>` / `lo leave <layer>:<group>` | Opt into or out of a group (sticks across refreshes). |
-| `lo subscribe <url> [--layer s] [--group u] [--priority n] [--ref r] [--dry-run]` / `lo unsubscribe <url>` | Manual sources. `--dry-run` previews what the source and its upstreams offer without changing anything. |
+| `lo subscribe <url> [--label l] [--layer s] [--rank n] [--group u] [--priority n] [--ref r] [--dry-run]` / `lo unsubscribe <url>` | Manual sources. `--dry-run` previews what the source and its upstreams offer without changing anything. |
+| `lo source set <url\|name\|label> [--label l] [--layer s] [--rank n] [--priority n]` / `lo source unset <…> [--label] [--layer] [--rank] [--priority]` | Where a source sits for you, including upstreams and company-listed sources. Applies straight away. |
+| `lo layers` / `lo layers set <name>=<rank>...` / `lo layers unset <name>...` | The layers in effect, each rank and where it came from; rank layers yourself (`[layers]` in `config.toml`). |
 | `lo targets [list\|enable <id>\|disable <id>\|mode <id> symlink\|copy]` | Which AI tools to install into, and how. |
 
 **Sync and review**
@@ -399,7 +450,7 @@ Exit codes: `0` ok, `1` error, `2` changes pending review, `3` audit blocked,
 | `lo list [--kind k] [--enabled\|--disabled] [--target t]` | Resolved items. |
 | `lo search <query> [--kind] [--tag] [--layer] [--role] [--group] [--source] [--author] [--all-sources]` | Search names, descriptions, tags, authors and text. `--all-sources` includes groups you're not in. |
 | `lo info <source\|kind/name\|id>` | A source's `LOADOUT.md` or an item's docs. |
-| `lo why <kind/name>` | Every candidate, the winner, the rule, and where it's installed. |
+| `lo why <kind/name>` | Every candidate, the winner, the rule, where each rank came from, and where it's installed. |
 | `lo enable <id>` / `lo disable <id>` | Toggle an item (refused for required or locked items). |
 | `lo prefer <source:kind/name>` | Settle an equal-rank conflict. |
 
@@ -435,11 +486,14 @@ subscribing, fill in templates, review pending updates.
 
 The web UI is written for people who have never used Git or a terminal. New
 users land on **Start here**: a short tour and a checklist that follows their
-real setup (connect with the company's link, pick AI tools, update, browse).
+real setup (**Paste a link** someone shared or **Start your own** source,
+pick AI tools, update, browse).
 Every page has an "About this page" note, and a glossary explains the words.
-**Your layers** shows the hierarchy: the groups you're in from the company
+**Your layers** shows the hierarchy: the groups you're in from the broadest
 down to you, and under each layer the items it gives you, which ones replace
-a broader layer's version, and which were replaced by one closer to you.
+a broader layer's version, and which were replaced by one closer to you. Its
+**Ranks** card lets you drag or type each layer's rank, and **Place…** on
+**Sources** gives a source your own label, layer, rank and priority.
 Its **Create & edit** page has forms for a **new skill** and a **new
 template** (starters, the blanks to fill in, and a preview with example
 answers), and **Share skills you already have**, which copies skills you

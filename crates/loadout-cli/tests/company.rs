@@ -311,23 +311,84 @@ fn manual_sources_follow_company_config_policy() {
 #[test]
 fn init_refuses_a_different_company_config() {
     let w = World::new(true);
+    let v = w.json(&["init", &w.company_config.url(), "--non-interactive"]);
+    assert_eq!(v["kind"], "company_config");
+    assert_eq!(v["company"], "acme");
     w.ok(&["init", &w.company_config.url(), "--non-interactive"]);
-    w.ok(&["init", &w.company_config.url(), "--non-interactive"]);
-    let other = repo(&w.s, "not-a-config", "team", "x", "t");
+    let other = FixtureRepo::init(w.s.root.join("remotes/other-config"), w.s.git.clone());
+    other.write(
+        "LOADOUT.md",
+        "---\nloadout: 1\nname: other-config\nlayer: company\ngroup: other\ncompany:\n  name: other\n  layers: [{ name: company, rank: 0 }]\n---\n",
+    );
+    other.commit("other");
     let out = w.run(&["init", &other.url(), "--non-interactive"]);
     assert_eq!(out.code, 1);
     assert!(out.stderr.contains("already set up"), "{}", out.stderr);
+
+    // A source's link still works: it's subscribed to on top.
+    let extra = repo(&w.s, "extra", "team", "payments-dev", "extra-tool");
+    let v = w.json(&["init", &extra.url(), "--non-interactive"]);
+    assert_eq!(v["kind"], "source");
+    assert!(w.s.skills_dir().join("extra-tool").exists());
+    assert!(w.s.skills_dir().join("company-tool").exists());
 }
 
 #[test]
-fn init_rejects_non_company_config_repo() {
+fn init_with_a_source_subscribes_to_it_and_its_upstreams() {
     let s = Sandbox::with_claude();
-    let plain = repo(&s, "plain", "team", "x", "t");
+    let eng = repo(&s, "eng-skills", "org", "eng", "eng-tool");
+    let team = repo(&s, "team-skills", "team", "payments-dev", "team-tool");
+    team.write(
+        "LOADOUT.md",
+        &format!(
+            "---\nloadout: 1\nname: team-skills\nlayer: team\ngroup: payments-dev\nupstream: [{:?}]\n---\n",
+            eng.url()
+        ),
+    );
+    team.commit("upstream");
+    let v = s.json(&["init", &team.url(), "--non-interactive"]);
+    assert_eq!(v["kind"], "source");
+    assert_eq!(v["url"], team.url());
+    assert!(v.get("company_config").is_none(), "{v}");
+    let names: Vec<&str> = v["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["team-skills", "eng-skills"]);
+    assert_eq!(v["sources"][1]["via"], "team-skills");
+    assert_eq!(v["targets"], serde_json::json!(["claude-code"]));
+    assert!(s.skills_dir().join("team-tool").exists());
+    assert!(s.skills_dir().join("eng-tool").exists());
+    let config = std::fs::read_to_string(s.config.join("config.toml")).unwrap();
+    assert!(config.contains("[[source]]"), "{config}");
+    assert!(!config.contains("company_config"), "{config}");
+
+    // Human output names the source and what it builds on.
+    let s2 = Sandbox::with_claude();
+    let out = s2.ok(&["init", &team.url(), "--non-interactive"]);
+    assert!(out.stdout.contains("Subscribed to"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("upstream of team-skills"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn init_rejects_a_repo_without_loadout_md() {
+    let s = Sandbox::with_claude();
+    let plain = FixtureRepo::init(s.root.join("remotes/plain"), s.git.clone());
+    plain.write("README.md", "# Not a source\n");
+    plain.commit("init");
     let out = s.run(&["init", &plain.url(), "--non-interactive"]);
     assert_eq!(out.code, 1);
     assert!(
-        out.stderr.contains("not a company config"),
+        out.stderr
+            .contains("isn't a Loadout source or company config"),
         "{}",
         out.stderr
     );
+    assert!(!s.config.join("config.toml").exists());
 }

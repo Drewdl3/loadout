@@ -21,6 +21,7 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 use crate::ctx::{Ctx, Report};
 use crate::exit;
+use loadout_model::id::validate_source_name;
 
 const INDEX: &str = include_str!("index.html");
 /// Largest request body accepted.
@@ -233,6 +234,10 @@ impl Ui<'_> {
                 Ok(body) => self.template_use(&body),
                 Err(e) => json_reply(400, &json!({"error": e})),
             },
+            (Method::Post, "/api/start-own") => match read_json(req) {
+                Ok(body) => self.start_own(&body),
+                Err(e) => json_reply(400, &json!({"error": e})),
+            },
             (Method::Post, "/api/run") => match read_json(req) {
                 Ok(body) => self.action(&body),
                 Err(e) => json_reply(400, &json!({"error": e})),
@@ -293,6 +298,55 @@ impl Ui<'_> {
         let mut args = vec!["export-source", source];
         let msg = body["message"].as_str().unwrap_or("Update from lo ui");
         args.extend(["--message", msg]);
+        self.loadout(&args)
+    }
+
+    /// `POST /api/start-own {"name", "layer", "rank"?, "group"?}`: create a
+    /// source in `~/loadout/<name>`, commit it, subscribe and sync
+    /// (`lo init --new-source … --subscribe`).
+    fn start_own(&self, body: &Value) -> Reply {
+        let word = |k: &str| {
+            body[k].as_str().map(str::trim).filter(|v| {
+                !v.is_empty() && !v.starts_with('-') && !v.contains(char::is_whitespace)
+            })
+        };
+        let Some(name) = word("name").filter(|n| validate_source_name(n).is_ok()) else {
+            return json_reply(
+                400,
+                &json!({"error": "\"name\" must be kebab-case, e.g. payments-skills"}),
+            );
+        };
+        let Some(layer) = word("layer") else {
+            return json_reply(
+                400,
+                &json!({"error": "\"layer\" required, e.g. team or user"}),
+            );
+        };
+        let dir = self.ctx.paths.home.join("loadout").join(name);
+        if dir.exists() {
+            return json_reply(
+                400,
+                &json!({"error": format!("{} already exists", dir.display())}),
+            );
+        }
+        let dir = dir.to_string_lossy().into_owned();
+        let rank = body["rank"].as_i64().map(|r| r.to_string());
+        let mut args = vec![
+            "init",
+            "--new-source",
+            &dir,
+            "--name",
+            name,
+            "--layer",
+            layer,
+        ];
+        if let Some(r) = &rank {
+            args.extend(["--rank", r]);
+        }
+        if let Some(g) = word("group") {
+            args.extend(["--group", g]);
+        }
+        args.extend(["--subscribe", "--non-interactive"]);
         self.loadout(&args)
     }
 
@@ -397,6 +451,11 @@ pub fn sources_json(ctx: &Ctx) -> Result<Value> {
                 "upstream": s.upstream,
                 "layer": s.layer,
                 "group": s.group,
+                "label": s.label,
+                "placed_at": s.placed_at,
+                "rank": s.rank,
+                "placed_by": s.placed_by.as_ref().map(ToString::to_string),
+                "priority": s.priority,
             })
         })
         .collect();
@@ -406,17 +465,9 @@ pub fn sources_json(ctx: &Ctx) -> Result<Value> {
 /// The layers in rank order, broadest first, and the winner of
 /// each `kind/name` after the last sync, for the Layers page.
 pub fn layers_json(ctx: &Ctx) -> Result<Value> {
-    let config = ctx.load_config()?;
-    let layers = match &config.company_config {
-        Some(url) if ctx.paths.project.is_none() => {
-            crate::membership::load_company_config(ctx, &loadout_git::Git::new(), url, false)
-                .map(|c| c.company_config.layer_model())
-                .unwrap_or_default()
-        }
-        _ => loadout_model::LayerModel::default(),
-    };
-    let mut ranked: Vec<(&str, i64)> = layers.layers().collect();
-    ranked.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(b.0)));
+    let (layers, warnings) = crate::layers::current(ctx)?;
+    let mut ranked: Vec<(&str, &loadout_model::LayerRank)> = layers.entries().collect();
+    ranked.sort_by(|a, b| a.1.rank.cmp(&b.1.rank).then(a.0.cmp(b.0)));
     let winners: serde_json::Map<String, Value> =
         crate::state::Resolved::load(&ctx.paths.resolved_file())?
             .map(|r| r.resolution.items)
@@ -437,8 +488,18 @@ pub fn layers_json(ctx: &Ctx) -> Result<Value> {
             })
             .collect();
     Ok(json!({
-        "layers": ranked.iter().map(|(n, r)| json!({"name": n, "rank": r})).collect::<Vec<_>>(),
+        "layers": ranked
+            .iter()
+            .map(|(n, l)| json!({
+                "name": n,
+                "rank": l.rank,
+                "from": l.from,
+                "origin": l.from.to_string(),
+                "declared_rank": l.declared.filter(|d| *d != l.rank),
+            }))
+            .collect::<Vec<_>>(),
         "resolution": winners,
+        "warnings": warnings,
     }))
 }
 
@@ -463,6 +524,17 @@ pub fn allowed(args: &[&str]) -> Result<(), String> {
                 && args[2] == "--non-interactive"
         }
         Some("approve") => positional(1) || args == ["approve", "--all"],
+        // Ranking layers: `layers set name=rank…`, `layers unset name…`.
+        Some("layers") => {
+            matches!(args.get(1).copied(), Some("set" | "unset"))
+                && args.len() > 2
+                && args[2..]
+                    .iter()
+                    .all(|a| !a.is_empty() && !a.starts_with('-'))
+        }
+        // Placing a source: `source set <src> --label L --rank N …`,
+        // `source unset <src> --rank …`.
+        Some("source") => source_args_ok(args),
         Some("profile") => args == ["profile", "refresh"],
         Some("targets") => match args.get(1).copied() {
             Some("enable" | "disable") => positional(2),
@@ -503,6 +575,43 @@ pub fn allowed(args: &[&str]) -> Result<(), String> {
     } else {
         Err(format!("the UI can't run `lo {}`", args.join(" ")))
     }
+}
+
+/// `source set <src> [--label|--layer|--rank|--priority <v>]…` or
+/// `source unset <src> [--label|--layer|--rank|--priority]…`, each flag at
+/// most once.
+fn source_args_ok(args: &[&str]) -> bool {
+    const FLAGS: [&str; 4] = ["--label", "--layer", "--rank", "--priority"];
+    let (Some(sub), Some(src)) = (args.get(1), args.get(2)) else {
+        return false;
+    };
+    if src.is_empty() || src.starts_with('-') {
+        return false;
+    }
+    let rest = &args[3..];
+    let mut seen = std::collections::BTreeSet::new();
+    let flags: Vec<&str> = match *sub {
+        "set" => {
+            if rest.is_empty() || !rest.len().is_multiple_of(2) {
+                return false;
+            }
+            let pairs: Vec<_> = rest.chunks(2).collect();
+            let values_ok = pairs.iter().all(|p| {
+                let v = p[1];
+                match p[0] {
+                    "--rank" | "--priority" => v.parse::<i64>().is_ok(),
+                    _ => !v.is_empty() && !v.starts_with('-'),
+                }
+            });
+            if !values_ok {
+                return false;
+            }
+            pairs.iter().map(|p| p[0]).collect()
+        }
+        "unset" => rest.to_vec(),
+        _ => return false,
+    };
+    !flags.is_empty() && flags.iter().all(|f| FLAGS.contains(f) && seen.insert(*f))
 }
 
 /// Runs this binary with `args` + `--json`; returns (exit code, JSON).
@@ -628,6 +737,26 @@ mod tests {
             &["import", "lo1_x", "--dry-run"],
             &["import", "lo1_x", "--yes"],
             &["import", "lo1_x", "--latest", "--yes"],
+            &["layers", "set", "beta=27"],
+            &["layers", "set", "beta=27", "team=-3"],
+            &["layers", "unset", "beta"],
+            &["source", "set", "beta-skills", "--rank", "27"],
+            &[
+                "source",
+                "set",
+                "beta-skills",
+                "--label",
+                "Beta (payments)",
+                "--priority",
+                "-2",
+            ],
+            &[
+                "source",
+                "unset",
+                "https://git.example.com/x",
+                "--rank",
+                "--label",
+            ],
         ] {
             assert!(allowed(ok).is_ok(), "{ok:?}");
         }
@@ -648,6 +777,19 @@ mod tests {
             &["init", "https://git.example.com/acme/company-config"],
             &["init", "--new-source", "--non-interactive"],
             &["init", "x", "--new-company"],
+            &["layers"],
+            &["layers", "set"],
+            &["layers", "set", "--json"],
+            &["layers", "reset", "beta"],
+            &["source", "set", "x"],
+            &["source", "set", "x", "--rank"],
+            &["source", "set", "x", "--rank", "high"],
+            &["source", "set", "x", "--rank", "1", "--rank", "2"],
+            &["source", "set", "x", "--label", "--project-dir"],
+            &["source", "set", "--rank", "1", "x"],
+            &["source", "set", "x", "--project-dir", "y"],
+            &["source", "unset", "x"],
+            &["source", "unset", "x", "--json"],
             &[],
         ] {
             assert!(allowed(bad).is_err(), "{bad:?}");

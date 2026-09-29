@@ -85,11 +85,17 @@ This creates a folder with:
 - `AGENTS.md`: instructions for AI agents working in the repo
 - a CI workflow that runs `lo audit` on every change
 
-Push it to your Git host, then either ask whoever owns the company config to list it
-under your team's group, or have people `lo subscribe` to it.
+Push it to your Git host and share its link: people connect with
+`lo init <link>` (or `lo subscribe <link>`, or **Paste a link** in the web
+UI). If your company keeps a company config, you can also ask its owners to
+list it under your team's group.
 
 `--upstream` makes your source build on another: anyone who adds yours also
-gets the upstream's items, each at its own layer.
+gets the upstream's items, each at its own layer. An `upstream:` entry in
+`LOADOUT.md` can also give the upstream a `label`, `layer`, `rank` or
+`priority` for your subscribers. For a layer of your own, add `--rank`
+(`--layer beta --rank 27`); see
+[Growing across your org](Growing-Across-Your-Org.md#3-name-your-own-layers).
 
 ### One repo for a team and its squads
 
@@ -116,8 +122,9 @@ group: beaver
 
 Put the squad's skills in `squads/beaver/skills/`, and so on. Everyone who
 adds the team's repo gets the team's items, plus the items of whichever
-squads they're in (the company config decides who's in each squad; see
-[Setting up your company](Setting-Up-Your-Company.md#an-example)). A squad's
+squads they're in (a company config can decide who's in each squad, or
+people add `squad = ["beaver"]` under `[profile]` themselves; see
+[Growing across your org](Growing-Across-Your-Org.md#an-example)). A squad's
 version of a skill replaces the team's for its members. Squad folders can sit deeper (`squads/west/alpha/`), and a squad can
 list `nested:` folders of its own. The details are in
 [the format reference](../agents.md#nested-sources-one-repo-several-manifests).

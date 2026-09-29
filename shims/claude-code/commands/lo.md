@@ -10,11 +10,11 @@ disable-model-invocation: true
 !`lo $ARGUMENTS --json --exit-zero`
 
 The JSON above is the output of `lo $ARGUMENTS` (Loadout distributes
-skills, MCP servers and other agent configuration from the user's company
-repos). Explain it briefly for the user:
+skills, MCP servers and other agent configuration from the Git repos of the
+user's team and the teams it builds on). Explain it briefly for the user:
 
-- For `why`: which source won and why (layer rank, lock, priority), which
-  candidates lost, and where it is installed.
+- For `why`: which source won and why (layer rank and where it came from,
+  lock, priority), which candidates lost, and where it is installed.
 - For `status` / `diff`: what is pending review and why; suggest
   `/lo approve <source>` only if the user wants it.
 - For `list` / `search`: a short table of items (id, on/off, description).

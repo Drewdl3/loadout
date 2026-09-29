@@ -1,6 +1,6 @@
 ---
 name: loadout-authoring
-description: How to write Loadout content — skills, MCP servers, subagents, templates, sources (LOADOUT.md) and company configs — in a Git repo that Loadout distributes. Use when creating or editing a source repo, adding a skill or MCP server for a team, making or filling in a template, or setting up a company config.
+description: How to write Loadout content — skills, MCP servers, subagents, templates, sources (LOADOUT.md) and company configs — in a Git repo that Loadout distributes. Use when creating or editing a source repo, adding a skill or MCP server for a team, connecting a source to other teams' sources, making or filling in a template, or setting up a company config.
 loadout:
   mode: default-off   # for people who write sources; `lo enable acme-config:skill/loadout-authoring`
   tags: [loadout, authoring]
@@ -9,14 +9,15 @@ loadout:
 # Writing Loadout sources
 
 A **source** is a Git repo with `LOADOUT.md` at its top. Its items are
-installed for everyone in its group. Full guide:
+installed for everyone who subscribes to it (`lo init <url>`), and for
+everyone in its group. Full guide:
 https://github.com/Drewdl3/loadout/blob/main/docs/agents.md
 
 ## Layout
 
 | Path | Item |
 |---|---|
-| `LOADOUT.md` | Manifest: `loadout: 1`, `name` (kebab-case), `layer`, `group`, `description`, `defaults: { mode }`, `upstream: [urls]` |
+| `LOADOUT.md` | Manifest: `loadout: 1`, `name` (kebab-case), `layer`, `group`, `description`, `defaults: { mode }`, `upstream: [urls or { url, label, layer, rank, priority }]`, `layers: [{ name, rank }]` for layers of your own |
 | `skills/<name>/SKILL.md` | Skill (+ any files it uses); `name` = directory name |
 | `mcp/<name>.md` | MCP server: `command`/`args`/`env`, or `url`/`headers` |
 | `agents/<name>.md` | Subagent |
@@ -31,7 +32,9 @@ overrides.
 ## Steps
 
 1. New repo: `lo init --new-source <dir> --layer <layer> --group <group> [--upstream <url>] --git-init`.
-   The layer must exist in the company config's `company.layers`; `user` is personal.
+   Use a built-in layer (`org`, `team`, `squad`, `role`, …), one the company
+   config defines, or your own with `--rank <n>`; `user` is personal. Connect
+   to the teams around it with `upstream:`.
 2. Write the item. A skill's `description` says what it does **and when to
    use it**. MCP secrets are references (`secret://jira/token`,
    `env://VAR`), never values. Pin package versions.

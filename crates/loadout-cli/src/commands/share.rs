@@ -110,6 +110,8 @@ pub fn export(ctx: &Ctx, args: ExportArgs) -> Result<u8> {
                 layer: s.layer.clone(),
                 group: s.group.clone(),
                 priority: s.priority,
+                label: s.label.clone(),
+                rank: s.rank,
             })
             .collect(),
         pins: resolved
@@ -120,6 +122,7 @@ pub fn export(ctx: &Ctx, args: ExportArgs) -> Result<u8> {
             .collect(),
         toggles: config.toggles.clone(),
         prefer: config.prefer.clone(),
+        layers: config.layers.clone(),
         targets: config
             .targets
             .enabled
@@ -415,11 +418,17 @@ pub fn import(ctx: &Ctx, args: ImportArgs) -> Result<u8> {
     for s in &payload.sources {
         doc.add_source(&SourceSub {
             url: s.url.clone(),
+            label: s.label.clone(),
             layer: s.layer.clone(),
             group: s.group.clone(),
+            rank: s.rank,
             priority: s.priority,
             git_ref: None,
         });
+    }
+    doc.remove_table("layers");
+    for (layer, rank) in &payload.layers {
+        doc.set_layer(layer, *rank);
     }
     doc.remove_table("toggles");
     for (id, on) in &payload.toggles {

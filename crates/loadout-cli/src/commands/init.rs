@@ -1,6 +1,7 @@
-//! `lo init <company-config-url>` — first-time setup: fetch the
-//! company config, discover membership, let the user adjust groups and targets,
-//! save, and run the first sync.
+//! `lo init <url>` — first-time setup from a link someone shared. For a
+//! source (a team's repo, say): preview it and its upstreams, subscribe,
+//! pick targets and sync. For a company config: discover membership, let
+//! the user adjust groups and targets, save, and sync.
 //!
 //! `lo init --new-source [DIR]` / `--new-company [DIR]` create a source
 //! (catalog) or a company config instead; with no arguments in a
@@ -17,13 +18,14 @@ use loadout_members::{Basis, Discovery, GroupStatus};
 use loadout_model::config::normalize_url;
 use loadout_model::id::validate_source_name;
 use loadout_model::layer::USER_LAYER;
-use loadout_model::{Config, Membership};
+use loadout_model::manifest::MANIFEST_FILE;
+use loadout_model::{Config, ManifestDoc, Membership};
 use loadout_targets::TargetTable;
 use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::commands::new_source::{self, NewSourceReport, ScaffoldArgs};
-use crate::commands::subscribe::checked_url;
+use crate::commands::subscribe::{PreviewSource, checked_url};
 use crate::commands::sync::exit_code;
 use crate::ctx::{Ctx, Report};
 use crate::engine::{self, ApplyReport, Fetch, Options, enabled_targets};
@@ -31,20 +33,22 @@ use crate::membership;
 
 #[derive(Debug, Args)]
 pub struct InitArgs {
-    /// Git URL (or local path) of your company config repo (not used with
-    /// `--project`, `--new-source` or `--new-company`).
-    pub company_config: Option<String>,
+    /// Git URL (or local path) someone shared: a source (subscribed to,
+    /// with its upstreams) or a company config (sets you up for your
+    /// groups). Not used with `--project`, `--new-source` or `--new-company`.
+    #[arg(value_name = "URL")]
+    pub url: Option<String>,
     /// Accept discovered groups and detected tools without prompting.
     #[arg(long)]
     pub non_interactive: bool,
     /// Create a new source (a catalog of skills, MCP servers, …) in DIR
     /// [default: the current directory] instead of joining a company config.
     #[arg(long, visible_alias = "catalog", value_name = "DIR", num_args = 0..=1,
-          default_missing_value = ".", conflicts_with = "company_config")]
+          default_missing_value = ".", conflicts_with = "url")]
     pub new_source: Option<PathBuf>,
     /// Create a new company config in DIR [default: the current directory].
     #[arg(long, value_name = "DIR", num_args = 0..=1, default_missing_value = ".",
-          conflicts_with_all = ["company_config", "new_source"])]
+          conflicts_with_all = ["url", "new_source"])]
     pub new_company: Option<PathBuf>,
     /// New source: default layer of its items (team, org, squad, role, user, …).
     #[arg(long)]
@@ -58,6 +62,10 @@ pub struct InitArgs {
     /// New source: a higher source it builds on (repeatable).
     #[arg(long, value_name = "URL")]
     pub upstream: Vec<String>,
+    /// New source: suggested rank for its layer, for a layer of your own
+    /// (e.g. `--layer beta --rank 27`).
+    #[arg(long, allow_negative_numbers = true, requires = "new_source")]
+    pub rank: Option<i64>,
     /// New company config: the company name.
     #[arg(long)]
     pub company: Option<String>,
@@ -114,7 +122,7 @@ impl Report for InitCreateReport {
                     ),
                     None => writeln!(
                         out,
-                        "Next: push it to your Git host and list it in your company config (or `lo subscribe <url>`)."
+                        "Next: push it to your Git host and share the URL: people connect with `lo init <url>`."
                     ),
                 }
             }
@@ -126,26 +134,70 @@ impl Report for InitCreateReport {
     }
 }
 
-/// `--json` output of `lo init`.
+/// What `lo init <url>` connected to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InitKind {
+    /// A company config: you're set up for your groups.
+    CompanyConfig,
+    /// A source: you're subscribed to it (and get its upstreams).
+    Source,
+}
+
+/// `--json` output of `lo init <url>`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct InitReport {
-    pub company_config: String,
-    pub company: String,
+    pub kind: InitKind,
+    /// The URL as stored (local paths made absolute).
+    pub url: String,
+    /// `kind: company_config`: the company config URL.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company_config: Option<String>,
+    /// `kind: company_config`: the company name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company: Option<String>,
+    /// `kind: company_config`: every group and whether you're in it.
     pub groups: Vec<GroupStatus>,
+    /// `kind: source`: the source, then its upstreams, as `lo subscribe
+    /// --dry-run` shows them.
+    pub sources: Vec<PreviewSource>,
     pub targets: Vec<String>,
     pub sync: ApplyReport,
 }
 
 impl Report for InitReport {
     fn human(&self, out: &mut String) -> std::fmt::Result {
-        writeln!(
-            out,
-            "Company config: {} ({})",
-            self.company_config, self.company
-        )?;
-        writeln!(out, "Your groups:")?;
-        for u in self.groups.iter().filter(|u| u.member) {
-            writeln!(out, "  {}:{}", u.layer, u.group)?;
+        match self.kind {
+            InitKind::CompanyConfig => {
+                writeln!(
+                    out,
+                    "Company config: {} ({})",
+                    self.url,
+                    self.company.as_deref().unwrap_or("-")
+                )?;
+                writeln!(out, "Your groups:")?;
+                for u in self.groups.iter().filter(|u| u.member) {
+                    writeln!(out, "  {}:{}", u.layer, u.group)?;
+                }
+            }
+            InitKind::Source => {
+                writeln!(out, "Subscribed to {}.", self.url)?;
+                for s in &self.sources {
+                    let via = s
+                        .via
+                        .as_deref()
+                        .map(|v| format!(", upstream of {v}"))
+                        .unwrap_or_default();
+                    writeln!(
+                        out,
+                        "  {} ({}:{}{via}): {} item(s)",
+                        s.name,
+                        s.layer,
+                        s.group.as_deref().unwrap_or("-"),
+                        s.items.len()
+                    )?;
+                }
+            }
         }
         if self.targets.is_empty() {
             writeln!(out, "Tools: none enabled")?;
@@ -167,19 +219,19 @@ pub fn run(ctx: &Ctx, args: InitArgs) -> Result<u8> {
                 "`--project` sets up this repo's project layer; drop it to create a source or company config"
             );
         }
-        if args.company_config.is_some() {
+        if args.url.is_some() {
             bail!(
-                "a project layer doesn't take a company config; run `lo init --project` without a URL"
+                "a project layer doesn't take a URL; run `lo init --project`, then `lo subscribe <url> --project`"
             );
         }
         return crate::commands::project::init(ctx);
     }
     let interactive = !args.non_interactive && !ctx.json && std::io::stdin().is_terminal();
     let mut args = args;
-    if args.company_config.is_none() && args.new_source.is_none() && args.new_company.is_none() {
+    if args.url.is_none() && args.new_source.is_none() && args.new_company.is_none() {
         if !interactive {
             bail!(
-                "what should init do? `lo init <company-config-url>` joins your company's setup; `lo init --new-source [dir]` creates a source (catalog); `lo init --new-company [dir]` creates a company config; `lo init --project` sets up this repo"
+                "what should init do? `lo init <url>` connects to a source (or company config) someone shared; `lo init --new-source [dir]` creates a source for your team or yourself; `lo init --new-company [dir]` creates a company config; `lo init --project` sets up this repo"
             );
         }
         pick_mode(&mut args)?;
@@ -187,28 +239,39 @@ pub fn run(ctx: &Ctx, args: InitArgs) -> Result<u8> {
     if args.new_source.is_some() || args.new_company.is_some() {
         return create(ctx, args);
     }
-    let Some(company_config) = &args.company_config else {
-        unreachable!("pick_mode sets one of company_config/new_source/new_company");
+    let Some(url) = &args.url else {
+        unreachable!("pick_mode sets one of url/new_source/new_company");
     };
-    let url = checked_url(company_config)?;
-    let config = ctx.load_config()?;
-    if let Some(existing) = &config.company_config
-        && normalize_url(existing) != normalize_url(&url)
-    {
-        bail!(
-            "already set up with company config {existing}; remove `company_config` from config.toml to switch"
-        );
-    }
+    let url = checked_url(url)?;
     let git = Git::new();
-    let loaded = membership::load_company_config(ctx, &git, &url, true)?;
-    let mut discovery = membership::run_discovery(&loaded.company_config, &config);
-    let mut choices = config.membership.clone();
-    if interactive {
-        pick_groups(&mut discovery, &mut choices)?;
+    match kind_of(ctx, &git, &url)? {
+        InitKind::CompanyConfig => join_company(ctx, &git, url, interactive),
+        InitKind::Source => join_source(ctx, url, interactive),
     }
+}
 
+/// Fetches `url` into the preview cache and reads its `LOADOUT.md`: a
+/// `company:` block makes it a company config.
+fn kind_of(ctx: &Ctx, git: &Git, url: &str) -> Result<InitKind> {
+    let dir = loadout_git::repo_dir(&ctx.paths.data_dir.join("preview"), &normalize_url(url));
+    git.sync_checkout(url, &dir, None)
+        .with_context(|| format!("can't read {url}"))?;
+    let text = std::fs::read_to_string(dir.join(MANIFEST_FILE)).with_context(|| {
+        format!("{url} has no {MANIFEST_FILE}, so it isn't a Loadout source or company config")
+    })?;
+    let doc = ManifestDoc::parse(&text).with_context(|| url.to_owned())?;
+    Ok(if doc.manifest.company_config.is_some() {
+        InitKind::CompanyConfig
+    } else {
+        InitKind::Source
+    })
+}
+
+/// The AI tools to enable: `[targets] enabled` when set (non-interactive),
+/// else the detected ones (picked from in a terminal).
+fn choose_targets(ctx: &Ctx, config: &Config, interactive: bool) -> Result<Vec<String>> {
     let table = TargetTable::load(&ctx.paths.user_targets_dir())?;
-    let targets: Vec<String> = match &config.targets.enabled {
+    Ok(match &config.targets.enabled {
         Some(ids) if !interactive => ids.clone(),
         _ => {
             let probe = Config {
@@ -223,7 +286,99 @@ pub fn run(ctx: &Ctx, args: InitArgs) -> Result<u8> {
                 detected
             }
         }
+    })
+}
+
+/// `lo init <source-url>`: preview, subscribe, pick targets, sync.
+fn join_source(ctx: &Ctx, url: String, interactive: bool) -> Result<u8> {
+    let preview = crate::commands::subscribe::preview(ctx, &url, None)?;
+    if interactive {
+        let mut text = String::new();
+        preview.human(&mut text)?;
+        // Drop the preview's "Nothing was changed" footer.
+        let text = text
+            .lines()
+            .filter(|l| !l.starts_with("Nothing was changed"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        println!("{text}");
+        for w in &preview.warnings {
+            eprintln!("warning: {w}");
+        }
+        let name = preview
+            .sources
+            .first()
+            .map_or(url.as_str(), |s| s.name.as_str());
+        let upstreams = preview.sources.iter().filter(|s| s.via.is_some()).count();
+        let prompt = if upstreams > 0 {
+            format!("Subscribe to {name} and the {upstreams} source(s) it builds on?")
+        } else {
+            format!("Subscribe to {name}?")
+        };
+        if !dialoguer::Confirm::new()
+            .with_prompt(prompt)
+            .default(true)
+            .interact()
+            .context("reading your answer")?
+        {
+            bail!("nothing was changed");
+        }
+    }
+    let (url, _) = crate::commands::subscribe::add_subscription(
+        ctx,
+        crate::commands::subscribe::SubscribeArgs {
+            url,
+            layer: None,
+            group: None,
+            rank: None,
+            priority: 0,
+            label: None,
+            git_ref: None,
+            dry_run: false,
+        },
+    )?;
+    let config = ctx.load_config()?;
+    let targets = choose_targets(ctx, &config, interactive)?;
+    if !targets.is_empty() || interactive {
+        let mut doc = ctx.load_config_doc()?;
+        doc.set_targets_enabled(&targets);
+        ctx.save_config(&doc)?;
+    }
+    let config = ctx.load_config()?;
+    let mut sync = engine::apply(ctx, &config, Options::new(Fetch::Remote))?;
+    sync.warnings.splice(0..0, preview.warnings);
+    let report = InitReport {
+        kind: InitKind::Source,
+        url,
+        company_config: None,
+        company: None,
+        groups: Vec::new(),
+        sources: preview.sources,
+        targets,
+        sync,
     };
+    ctx.emit(&report)?;
+    Ok(exit_code(&report.sync))
+}
+
+/// `lo init <company-config-url>`: discover groups, pick groups and
+/// targets, save, sync.
+fn join_company(ctx: &Ctx, git: &Git, url: String, interactive: bool) -> Result<u8> {
+    let config = ctx.load_config()?;
+    if let Some(existing) = &config.company_config
+        && normalize_url(existing) != normalize_url(&url)
+    {
+        bail!(
+            "already set up with company config {existing}; remove `company_config` from config.toml to switch"
+        );
+    }
+    let loaded = membership::load_company_config(ctx, git, &url, true)?;
+    let mut discovery = membership::run_discovery(&loaded.company_config, &config);
+    let mut choices = config.membership.clone();
+    if interactive {
+        pick_groups(&mut discovery, &mut choices)?;
+    }
+    let targets = choose_targets(ctx, &config, interactive)?;
 
     let mut doc = ctx.load_config_doc()?;
     doc.set_company_config(&url);
@@ -236,7 +391,7 @@ pub fn run(ctx: &Ctx, args: InitArgs) -> Result<u8> {
 
     let config = ctx.load_config()?;
     let company = loaded.company_config.name.clone();
-    let sync = engine::apply(
+    let mut sync = engine::apply(
         ctx,
         &config,
         Options {
@@ -244,12 +399,14 @@ pub fn run(ctx: &Ctx, args: InitArgs) -> Result<u8> {
             ..Options::new(Fetch::Remote)
         },
     )?;
-    let mut sync = sync;
     sync.warnings.splice(0..0, discovery.warnings.clone());
     let report = InitReport {
-        company_config: url,
-        company,
+        kind: InitKind::CompanyConfig,
+        company_config: Some(url.clone()),
+        url,
+        company: Some(company),
         groups: discovery.groups,
+        sources: Vec::new(),
         targets,
         sync,
     };
@@ -259,11 +416,13 @@ pub fn run(ctx: &Ctx, args: InitArgs) -> Result<u8> {
 
 /// `lo init` with no arguments in a terminal: what do you want to do?
 fn pick_mode(args: &mut InitArgs) -> Result<()> {
+    // Start from your team's repo (or your own); a company config is one
+    // option, not the default path.
     let choices = [
-        "Join my company's setup (I have a company config URL)",
-        "Create a source (catalog) for my team, squad, product or role",
-        "Create a personal source for my own skills, building on my team's",
-        "Create a company config",
+        "Create a source for my team, squad, product or role",
+        "Create a personal source for my own skills",
+        "Connect to a repo someone shared (a team's source, or a company config)",
+        "Create a company config (to tie several teams' sources together)",
     ];
     let pick = dialoguer::Select::new()
         .with_prompt("What would you like to set up?")
@@ -293,9 +452,9 @@ fn pick_mode(args: &mut InitArgs) -> Result<()> {
             .context("reading input")
     };
     match pick {
-        0 => args.company_config = Some(prompt("Company config URL", None)?),
-        1 | 2 => {
-            let personal = pick == 2;
+        2 => args.url = Some(prompt("URL (or path) of the repo", None)?),
+        0 | 1 => {
+            let personal = pick == 1;
             let name = prompt_id(
                 "Source name (kebab-case)",
                 if personal {
@@ -316,7 +475,7 @@ fn pick_mode(args: &mut InitArgs) -> Result<()> {
                     "product",
                     "role",
                     "company",
-                    "another layer my company config defines…",
+                    "a layer of our own (e.g. beta)…",
                 ];
                 let i = dialoguer::Select::new()
                     .with_prompt("Layer of its items")
@@ -325,10 +484,16 @@ fn pick_mode(args: &mut InitArgs) -> Result<()> {
                     .interact()
                     .context("reading the layer")?;
                 if i == layers.len() - 1 {
-                    prompt_id(
-                        "Layer name (as in your company config's layers)",
-                        String::new(),
-                    )?
+                    let name = prompt_id("Layer name", String::new())?;
+                    let rank = dialoguer::Input::<i64>::new()
+                        .with_prompt(
+                            "Its rank (higher wins; built-in: company 0, org 10, team 20, squad 30, role 40, user 50)",
+                        )
+                        .default(25)
+                        .interact_text()
+                        .context("reading the rank")?;
+                    args.rank = Some(rank);
+                    name
                 } else {
                     layers[i].to_owned()
                 }
@@ -419,6 +584,7 @@ fn create(ctx: &Ctx, args: InitArgs) -> Result<u8> {
         .expect("create() needs a directory");
     let personal = args.layer.as_deref() == Some(USER_LAYER);
     let scaffold = ScaffoldArgs {
+        rank: args.rank,
         layer: args.layer.clone(),
         group: args.group.clone().or_else(|| personal.then(user_name)),
         name: args.name.clone(),
@@ -449,7 +615,9 @@ fn create(ctx: &Ctx, args: InitArgs) -> Result<u8> {
                 url: dir.display().to_string(),
                 layer: None,
                 group: None,
+                rank: None,
                 priority: 0,
+                label: None,
                 git_ref: None,
                 dry_run: false,
             },

@@ -33,6 +33,11 @@ pub struct ScaffoldArgs {
     /// Default group (e.g. payments-dev) [default: the source name].
     #[arg(long)]
     pub group: Option<String>,
+    /// Suggested rank for the source's layer, written to `layers:` in its
+    /// `LOADOUT.md` (for a layer of your own, e.g. `--layer beta --rank 27`;
+    /// the built-in ones are company=0 … role=40, user=50).
+    #[arg(long, allow_negative_numbers = true, conflicts_with = "company_config")]
+    pub rank: Option<i64>,
     /// Source id (kebab-case; default: the directory name).
     #[arg(long)]
     pub name: Option<String>,
@@ -126,7 +131,7 @@ impl Report for NewSourceReport {
         } else {
             writeln!(
                 out,
-                "  list it in your company config's groups (or `lo subscribe <url>`); try it locally with `lo subscribe {:?}`",
+                "  share its URL: people connect with `lo init <url>` (or `lo subscribe <url>`); try it locally with `lo subscribe {:?}`",
                 self.dir
             )
         }
@@ -218,7 +223,7 @@ pub fn scaffold(dir: &Path, args: &ScaffoldArgs) -> Result<NewSourceReport> {
         );
     }
     let Names { name, layer, group } = check(dir, args)?;
-    let upstream = if args.upstream.is_empty() {
+    let mut upstream = if args.upstream.is_empty() {
         String::new()
     } else {
         let mut u = "upstream:\n".to_owned();
@@ -227,6 +232,12 @@ pub fn scaffold(dir: &Path, args: &ScaffoldArgs) -> Result<NewSourceReport> {
         }
         u
     };
+    if let Some(rank) = args.rank {
+        upstream.insert_str(
+            0,
+            &format!("layers:\n  - {{ name: {layer}, rank: {rank} }}\n"),
+        );
+    }
 
     let manifest = if args.company_config {
         let company = args.company.clone().unwrap_or_else(|| group.clone());
@@ -234,7 +245,7 @@ pub fn scaffold(dir: &Path, args: &ScaffoldArgs) -> Result<NewSourceReport> {
         company_config_manifest(&name, &layer, &group, &company, &upstream, &layers)
     } else {
         format!(
-            "---\nloadout: 1\nname: {name}\nlayer: {layer}\ngroup: {group}\ndescription: Agent configuration for {layer} {group}.\ndefaults:\n  mode: default-on\n{upstream}---\n\n# {name}\n\nSkills (`skills/<name>/SKILL.md`), MCP servers (`mcp/<name>.md`) and other\nagent configuration for the `{layer}:{group}` group, distributed by\n[Loadout](https://github.com/Drewdl3/loadout).\n\n- Put secret **references** in MCP definitions (`secret://jira/token`),\n  never values.\n- Items can override the defaults above in a `loadout:` frontmatter block\n  (`mode: required | default-on | default-off`, `applies_to`, `locked`, …).\n- `upstream:` lists higher sources this one builds on; subscribers get\n  their items too.\n"
+            "---\nloadout: 1\nname: {name}\nlayer: {layer}\ngroup: {group}\ndescription: Agent configuration for {layer} {group}.\ndefaults:\n  mode: default-on\n{upstream}---\n\n# {name}\n\nSkills (`skills/<name>/SKILL.md`), MCP servers (`mcp/<name>.md`) and other\nagent configuration for the `{layer}:{group}` group, distributed by\n[Loadout](https://github.com/Drewdl3/loadout).\n\n- Put secret **references** in MCP definitions (`secret://jira/token`),\n  never values.\n- Items can override the defaults above in a `loadout:` frontmatter block\n  (`mode: required | default-on | default-off`, `applies_to`, `locked`, …).\n- `upstream:` lists higher sources this one builds on; subscribers get\n  their items too. An entry can also set `label`, `layer`, `rank` and\n  `priority` to say where that source sits for your subscribers.\n- `layers:` suggests ranks for layers of your own, e.g.\n  `- {{ name: beta, rank: 27 }}` (higher wins).\n"
         )
     };
     let files: Vec<(&str, String)> = vec![
@@ -285,7 +296,7 @@ fn agents_md(name: &str, layer: &str, group: &str, company_config: bool) -> Stri
         "a Loadout **source**"
     };
     let company_config_notes = if company_config {
-        "\n## The company config\n\n- `company.layers`: layer names and ranks. The higher rank wins when two\n  sources provide the same item. `company` is required.\n- `company.groups`: one entry per group: `layer`, `name`, `sources: [urls]`,\n  `membership:` (`github_team`, `gitlab_group`, `env`, `exec`,\n  `repo_access`, `manual`, `any`/`all`).\n- `company.policy`: `auto_apply` (layers whose updates skip review),\n  `allow_manual_sources`, `require_signed`.\n- Items here have layer `company`: everyone gets them. Use\n  `mode: required` + `locked: true` only for what must not be turned off.\n"
+        "\n## The company config\n\n- `company.layers`: layer names and ranks. The higher rank wins when two\n  sources provide the same item. `company` is required.\n- `company.groups`: one entry per group: `layer`, `name`, `sources: [urls]`,\n  `membership:` (`github_team`, `gitlab_group`, `env`, `exec`,\n  `repo_access`, `manual`, `any`/`all`).\n- `company.policy`: `auto_apply` (layers whose updates skip review),\n  `allow_manual_sources`, `allow_local_ranks`, `require_signed`.\n- Items here have layer `company`: everyone gets them. Use\n  `mode: required` + `locked: true` only for what must not be turned off.\n"
     } else {
         ""
     };
@@ -293,14 +304,15 @@ fn agents_md(name: &str, layer: &str, group: &str, company_config: bool) -> Stri
         r#"# AGENTS.md — {name}
 
 This repo is {what}. [Loadout](https://github.com/Drewdl3/loadout)
-installs its items for everyone in `{layer}:{group}`. Full guide for agents:
+installs its items for everyone who connects to it (`lo init <url>`) and
+for everyone in `{layer}:{group}`. Full guide for agents:
 https://github.com/Drewdl3/loadout/blob/main/docs/agents.md
 
 ## Layout
 
 | Path | Item |
 |---|---|
-| `LOADOUT.md` | Manifest (`name: {name}`, `layer: {layer}`, `group: {group}`, `defaults`, `upstream`). Keep `name` stable. |
+| `LOADOUT.md` | Manifest (`name: {name}`, `layer: {layer}`, `group: {group}`, `defaults`, `upstream`, `layers`). Keep `name` stable. |
 | `skills/<name>/SKILL.md` | A skill, plus any files it uses. `name` = the directory name. |
 | `mcp/<name>.md` | An MCP server: `command`/`args`/`env`, or `url`/`headers`. |
 | `agents/<name>.md` | A subagent. |
@@ -375,6 +387,7 @@ description: {company}'s Loadout company_config.
   policy:
     auto_apply: [company]        # updates from these layers apply without review
     allow_manual_sources: true   # may people subscribe to repos not listed here?
+    allow_local_ranks: true      # may people re-rank these layers and sources? (locks hold either way)
 ---
 
 # {company} company_config

@@ -2,9 +2,11 @@
 # against the release's SHA256SUMS, then optionally run `lo init`.
 #
 #   irm https://raw.githubusercontent.com/Drewdl3/loadout/main/install.ps1 | iex
-#   & ([scriptblock]::Create((irm …/install.ps1))) -CompanyConfig https://git.example.com/acme/agent-config
+#   & ([scriptblock]::Create((irm …/install.ps1))) -Connect https://git.example.com/acme/payments-skills
+# -Connect takes a team's source or a company config (-CompanyConfig is an alias).
 param(
-  [string]$CompanyConfig = "",
+  [Alias("CompanyConfig")]
+  [string]$Connect = "",
   [string]$Version = "",
   [string]$Dir = "$env:LOCALAPPDATA\Programs\lo"
 )
@@ -40,4 +42,4 @@ if (-not ($userPath -split ';' | Where-Object { $_ -eq $Dir })) {
   [Environment]::SetEnvironmentVariable("Path", "$userPath;$Dir", "User")
   Write-Host "Added $Dir to your user PATH (open a new terminal)."
 }
-if ($CompanyConfig) { & $exe init $CompanyConfig } else { Write-Host "Next: lo init <your company config URL>" }
+if ($Connect) { & $exe init $Connect } else { Write-Host "Next: lo init <a link someone shared>, or lo init to start your own (lo ui for the web UI)" }

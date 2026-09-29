@@ -29,8 +29,10 @@ add `check_for_updates = false` to your `config.toml`.
 Where new users land. A three-step explanation of Loadout and a checklist
 that follows your real setup:
 
-1. **Connect to your team's skills**: paste your company's link, or add a
-   single source.
+1. **Connect to your team's skills**: **Paste a link** someone shared (a
+   team's source, or a company config), or **Start your own** source for
+   your team or just for you. **Start your own** creates the source under
+   `loadout/` in your home folder, commits it, and connects you to it.
 2. **Choose your AI tools.**
 3. **Get the latest skills** (Update now).
 4. **Pick the skills you want.**
@@ -41,8 +43,9 @@ Each step ticks itself off when it's done.
 
 Your setup at a glance: how many skills and tools are on, how many sources,
 updates waiting for you, and when you last updated. **Your groups** lists
-every group in your company config, whether you're in it and how that was
-decided, with **Join** / **Leave** buttons for optional groups.
+your groups (with a company config, every group in it), whether you're in
+each and how that was decided, with **Join** / **Leave** buttons for
+optional groups.
 
 ## Browse skills
 
@@ -66,11 +69,16 @@ The hierarchy view: every skill, tool connection, subagent and rule arranged
 by **where it comes from**.
 
 - **Your chain** across the top shows the groups you're in, from the broadest
-  (the company) to you. When two have the same thing, the one further right
-  wins, unless one to the left has locked it.
+  to you. When two have the same thing, the one further right wins, unless
+  one to the left has locked it.
+- **Ranks** lists every layer with its rank and where that rank came from
+  (the defaults, a source, the company config, or you). Drag a layer up or
+  down, or type a rank, to re-rank it for yourself; **Reset** goes back to
+  the declared rank. Locked items stay where their sources put them.
 - Below it, one card per layer in rank order (company, org, team, product,
-  squad, role, you). Inside each, the groups you're in, the sources they
-  publish, and their items.
+  squad, role, you, and any layers your sources add). Inside each, the
+  groups you're in, the sources they publish (by their label, if you gave
+  them one), and their items.
 - Each item shows its status and what happened to it:
   - *Replaces the version from org:eng*: this one won over a broader layer.
   - *Replaced by the version from team:payments-dev, which is closer to you*:
@@ -102,12 +110,16 @@ See [Updates and review](Updates-and-Review.md).
 The shared folders your skills come from, drawn as a tree: a source that
 builds on another (`upstream:`) is shown under it, and so is a squad's source
 kept in a folder of a team's repo (`nested:`, marked *in squads/…/*). Each is
-marked *from your company*, *added by you*, or *included by …*. From here you
-can:
+marked *from your company*, *added by you*, or *included by …*, and shows its
+rank and priority if it was placed. From here you can:
 
 - **See its skills** (opens Browse skills filtered to it)
 - **Edit** its items
+- **Place…** it: give it your own label, rank it at another layer or at an
+  exact rank, and set its priority for ties. Only for you; it works for
+  upstreams and company-listed sources too.
 - **Remove** a source you added yourself
+- **Start your own** source
 - **Add a source** by its address, with a **Preview** of what it contains
   before you add it
 
@@ -124,14 +136,15 @@ Give someone your exact setup, or use theirs. Handy for getting a new
 teammate going in one step.
 
 - **Make a share code** gives you a code (`lo1_…`) to send, with a **Copy**
-  button and a QR code. It holds your company link, your groups, sources
-  you added, what you turned on or off, and your AI tools. It never
+  button and a QR code. It holds your company link (if any), your groups,
+  sources you added (with their labels and ranks), your own layer ranks,
+  what you turned on or off, and your AI tools. It never
   contains passwords, tokens or other secrets. Tick **Latest versions** if
   they should get the newest of everything instead of exactly your versions.
 - **Use someone's setup**: paste their code and click **Preview** to see
   what would change. Nothing happens until you click **Replace my setup
-  with this**, which replaces your groups, added sources, on/off choices and
-  AI tools. Afterwards your fingerprint matches theirs.
+  with this**, which replaces your groups, added sources, on/off choices,
+  layer ranks and AI tools. Afterwards your fingerprint matches theirs.
 
 They still need access to the same Git repos, and set up their own secrets.
 New users can also get here from **Start here** → **I have a share code**.

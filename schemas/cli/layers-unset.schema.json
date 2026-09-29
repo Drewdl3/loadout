@@ -1,312 +1,151 @@
 {
-  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/init.schema.json",
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/layers-unset.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "InitReport",
-  "description": "`--json` output of `lo init <url>`.",
+  "title": "LayersReport",
+  "description": "`--json` output of `lo layers`, `lo layers set` and `lo layers unset`.",
   "type": "object",
   "properties": {
-    "kind": {
-      "$ref": "#/$defs/InitKind"
-    },
-    "url": {
-      "description": "The URL as stored (local paths made absolute).",
-      "type": "string"
-    },
-    "company_config": {
-      "description": "`kind: company_config`: the company config URL.",
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "company": {
-      "description": "`kind: company_config`: the company name.",
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "groups": {
-      "description": "`kind: company_config`: every group and whether you're in it.",
+    "layers": {
+      "description": "Broadest (lowest rank) first.",
       "type": "array",
       "items": {
-        "$ref": "#/$defs/GroupStatus"
+        "$ref": "#/$defs/LayerEntry"
       }
     },
-    "sources": {
-      "description": "`kind: source`: the source, then its upstreams, as `lo subscribe\n--dry-run` shows them.",
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/PreviewSource"
-      }
+    "changed": {
+      "description": "Whether `config.toml` changed (always false for a listing).",
+      "type": "boolean"
     },
-    "targets": {
+    "sync": {
+      "description": "The re-apply after a change, from the cached checkouts.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApplyReport"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "warnings": {
       "type": "array",
       "items": {
         "type": "string"
       }
-    },
-    "sync": {
-      "$ref": "#/$defs/ApplyReport"
     }
   },
   "required": [
-    "kind",
-    "url",
-    "groups",
-    "sources",
-    "targets",
-    "sync"
+    "layers",
+    "changed",
+    "warnings"
   ],
   "$defs": {
-    "InitKind": {
-      "description": "What `lo init <url>` connected to.",
-      "oneOf": [
-        {
-          "description": "A company config: you're set up for your groups.",
-          "type": "string",
-          "const": "company_config"
-        },
-        {
-          "description": "A source: you're subscribed to it (and get its upstreams).",
-          "type": "string",
-          "const": "source"
-        }
-      ]
-    },
-    "GroupStatus": {
+    "LayerEntry": {
       "type": "object",
       "properties": {
-        "layer": {
-          "type": "string"
-        },
-        "group": {
-          "type": "string"
-        },
-        "member": {
-          "type": "boolean"
-        },
-        "basis": {
-          "$ref": "#/$defs/Basis"
-        },
-        "joinable": {
-          "description": "Whether `lo join` is allowed for this group.",
-          "type": "boolean"
-        },
-        "error": {
-          "description": "Provider error when `basis` is `cached`.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "layer",
-        "group",
-        "member",
-        "basis",
-        "joinable"
-      ]
-    },
-    "Basis": {
-      "description": "How a group's membership was decided.",
-      "oneOf": [
-        {
-          "description": "The company's own group: everyone.",
-          "type": "string",
-          "const": "company"
-        },
-        {
-          "description": "The membership rule was evaluated.",
-          "type": "string",
-          "const": "rule"
-        },
-        {
-          "description": "`lo join`.",
-          "type": "string",
-          "const": "joined"
-        },
-        {
-          "description": "`lo leave`.",
-          "type": "string",
-          "const": "left"
-        },
-        {
-          "description": "A provider failed; the cached profile was used.",
-          "type": "string",
-          "const": "cached"
-        }
-      ]
-    },
-    "PreviewSource": {
-      "description": "One source in a preview.",
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string"
-        },
         "name": {
           "type": "string"
         },
-        "layer": {
-          "type": "string"
+        "rank": {
+          "type": "integer",
+          "format": "int64"
         },
-        "group": {
+        "from": {
+          "description": "Where `rank` came from.",
+          "$ref": "#/$defs/RankOrigin"
+        },
+        "declared_rank": {
+          "description": "The rank its sources or the company config declared, when your\n`config.toml` changed it. Locks still hold at this rank.",
           "type": [
-            "string",
+            "integer",
             "null"
-          ]
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "commit": {
-          "type": "string"
-        },
-        "via": {
-          "description": "The source whose `upstream:` brings this one in.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "path": {
-          "description": "For a nested source: the directory of its `LOADOUT.md` in the repo.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "items": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Doc"
-          }
-        },
-        "templates": {
-          "description": "Template ids (`source:template/name`).",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          ],
+          "format": "int64"
         }
       },
       "required": [
-        "url",
         "name",
-        "layer",
-        "commit",
-        "items",
-        "templates"
+        "rank",
+        "from"
       ]
     },
-    "Doc": {
-      "description": "One searchable item.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "description": "`source:kind/name`.",
-          "type": "string"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "source": {
-          "type": "string"
-        },
-        "layer": {
-          "type": "string"
-        },
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "product": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "roles": {
-          "description": "Roles from `applies_to.role`.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "author": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "co_authors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "body": {
-          "type": "string"
-        },
-        "state": {
-          "$ref": "#/$defs/State"
-        }
-      },
-      "required": [
-        "id",
-        "kind",
-        "name",
-        "source",
-        "layer",
-        "state"
-      ]
-    },
-    "State": {
-      "description": "Where an item stands for this user.",
+    "RankOrigin": {
+      "description": "Where a layer's rank, or a source's placement, came from.",
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "enabled",
-            "disabled"
+          "description": "Loadout's built-in ranks.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "const": "default"
+            }
+          },
+          "required": [
+            "from"
           ]
         },
         {
-          "description": "Another source's item with the same name wins.",
-          "type": "string",
-          "const": "shadowed"
+          "description": "Suggested by a source's `LOADOUT.md` (`layers:`).",
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string",
+              "const": "source"
+            }
+          },
+          "required": [
+            "from",
+            "source"
+          ]
         },
         {
-          "description": "Not for this profile (group, `applies_to`, targets).",
-          "type": "string",
-          "const": "not-for-you"
+          "description": "The company config's `company.layers`.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "const": "company_config"
+            }
+          },
+          "required": [
+            "from"
+          ]
         },
         {
-          "description": "From a company config source you're not subscribed to (`--all-sources`).",
-          "type": "string",
-          "const": "not-subscribed"
+          "description": "`[layers]` in your `config.toml`.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "const": "config"
+            }
+          },
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "description": "A subscription's `layer` / `rank`: your `[[source]]` in\n`config.toml`, or (with `upstream_of`) the `upstream:` entry of the\nsource that pulled it in.",
+          "type": "object",
+          "properties": {
+            "upstream_of": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "from": {
+              "type": "string",
+              "const": "subscription"
+            }
+          },
+          "required": [
+            "from"
+          ]
         }
       ]
     },

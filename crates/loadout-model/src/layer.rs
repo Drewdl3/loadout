@@ -11,54 +11,155 @@ pub struct Layer {
     pub rank: i64,
 }
 
-/// The layer ranks in effect: the company config's, or [`LayerModel::default`].
+/// Where a layer's rank, or a source's placement, came from.
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(tag = "from", rename_all = "snake_case")]
+pub enum RankOrigin {
+    /// Loadout's built-in ranks.
+    Default,
+    /// Suggested by a source's `LOADOUT.md` (`layers:`).
+    Source { source: String },
+    /// The company config's `company.layers`.
+    CompanyConfig,
+    /// `[layers]` in your `config.toml`.
+    Config,
+    /// A subscription's `layer` / `rank`: your `[[source]]` in
+    /// `config.toml`, or (with `upstream_of`) the `upstream:` entry of the
+    /// source that pulled it in.
+    Subscription {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        upstream_of: Option<String>,
+    },
+}
+
+impl std::fmt::Display for RankOrigin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RankOrigin::Default => write!(f, "the built-in defaults"),
+            RankOrigin::Source { source } => write!(f, "{source}'s LOADOUT.md"),
+            RankOrigin::CompanyConfig => write!(f, "the company config"),
+            RankOrigin::Config => write!(f, "your config.toml [layers]"),
+            RankOrigin::Subscription { upstream_of: None } => {
+                write!(f, "your [[source]] in config.toml")
+            }
+            RankOrigin::Subscription {
+                upstream_of: Some(s),
+            } => write!(f, "the upstream: entry in {s}"),
+        }
+    }
+}
+
+/// One layer's rank and where it came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerRank {
+    pub rank: i64,
+    pub from: RankOrigin,
+    /// The rank before your `config.toml` changed it: the one its sources
+    /// or the company config declared. Locks are compared at this rank.
+    /// `None` for a layer only your `config.toml` defines.
+    pub declared: Option<i64>,
+}
+
+/// The layer ranks in effect. See `loadout_core::layers::merge` for how
+/// defaults, sources, the company config and `config.toml` combine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayerModel {
-    ranks: BTreeMap<String, i64>,
+    ranks: BTreeMap<String, LayerRank>,
 }
 
 /// The personal layer: a person's own source.
 pub const USER_LAYER: &str = "user";
 
+/// The built-in ranks (company 0 … role 40, plus `project` at 35 and
+/// `user` at 50).
+pub const DEFAULT_LAYERS: [(&str, i64); 8] = [
+    ("company", 0),
+    ("org", 10),
+    ("team", 20),
+    ("product", 25),
+    ("squad", 30),
+    ("project", 35),
+    ("role", 40),
+    (USER_LAYER, 50),
+];
+
 impl Default for LayerModel {
-    /// The default ranks (company 0 … role 40) plus `project` at 35 and
-    /// `user` at 50, used until a company config defines its own.
+    /// The built-in ranks, used when nothing else defines layers.
     fn default() -> Self {
-        LayerModel::new([
-            ("company", 0),
-            ("org", 10),
-            ("team", 20),
-            ("product", 25),
-            ("squad", 30),
-            ("project", 35),
-            ("role", 40),
-            (USER_LAYER, 50),
-        ])
+        LayerModel::new(DEFAULT_LAYERS)
     }
 }
 
 impl LayerModel {
+    /// Layers with the built-in origin.
     pub fn new<'a>(layers: impl IntoIterator<Item = (&'a str, i64)>) -> Self {
-        LayerModel {
-            ranks: layers.into_iter().map(|(n, r)| (n.to_owned(), r)).collect(),
+        let mut m = LayerModel {
+            ranks: BTreeMap::new(),
+        };
+        for (n, r) in layers {
+            m.declare(n, r, RankOrigin::Default);
         }
+        m
+    }
+
+    /// Sets `layer`'s declared rank (a source's, the company config's or
+    /// the default).
+    pub fn declare(&mut self, layer: &str, rank: i64, from: RankOrigin) {
+        self.ranks.insert(
+            layer.to_owned(),
+            LayerRank {
+                rank,
+                from,
+                declared: Some(rank),
+            },
+        );
+    }
+
+    /// Re-ranks `layer` locally (`config.toml`), keeping its declared rank.
+    pub fn override_rank(&mut self, layer: &str, rank: i64) {
+        let declared = self.ranks.get(layer).and_then(|l| l.declared);
+        self.ranks.insert(
+            layer.to_owned(),
+            LayerRank {
+                rank,
+                from: RankOrigin::Config,
+                declared,
+            },
+        );
     }
 
     /// Adds the `user` layer above every other one, unless it's defined.
     pub fn with_user_layer(mut self) -> Self {
         if !self.ranks.contains_key(USER_LAYER) {
-            let top = self.ranks.values().copied().max().unwrap_or(0);
-            self.ranks.insert(USER_LAYER.to_owned(), top + 10);
+            let top = self.ranks.values().map(|l| l.rank).max().unwrap_or(0);
+            self.declare(USER_LAYER, top + 10, RankOrigin::Default);
         }
         self
     }
 
     pub fn rank(&self, layer: &str) -> Option<i64> {
-        self.ranks.get(layer).copied()
+        self.ranks.get(layer).map(|l| l.rank)
+    }
+
+    /// The rank `layer`'s sources declared, before any local re-rank;
+    /// the effective rank for a layer only `config.toml` defines.
+    pub fn declared_rank(&self, layer: &str) -> Option<i64> {
+        self.ranks.get(layer).map(|l| l.declared.unwrap_or(l.rank))
+    }
+
+    pub fn get(&self, layer: &str) -> Option<&LayerRank> {
+        self.ranks.get(layer)
     }
 
     pub fn layers(&self) -> impl Iterator<Item = (&str, i64)> {
-        self.ranks.iter().map(|(n, r)| (n.as_str(), *r))
+        self.ranks.iter().map(|(n, l)| (n.as_str(), l.rank))
+    }
+
+    /// Every layer with its rank and origin, by name.
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &LayerRank)> {
+        self.ranks.iter().map(|(n, l)| (n.as_str(), l))
     }
 }
 
@@ -131,6 +232,19 @@ mod tests {
         assert_eq!(company_config.rank("user"), Some(80));
         let own = LayerModel::new([("company", 0), ("user", 5)]).with_user_layer();
         assert_eq!(own.rank("user"), Some(5));
+    }
+
+    #[test]
+    fn local_override_keeps_the_declared_rank() {
+        let mut m = LayerModel::default();
+        m.override_rank("company", 99);
+        m.override_rank("beta", 27);
+        assert_eq!(m.rank("company"), Some(99));
+        assert_eq!(m.declared_rank("company"), Some(0));
+        assert_eq!(m.get("company").unwrap().from, RankOrigin::Config);
+        // Only config.toml knows `beta`: its declared rank is the local one.
+        assert_eq!(m.declared_rank("beta"), Some(27));
+        assert_eq!(m.get("beta").unwrap().declared, None);
     }
 
     #[test]

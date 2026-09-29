@@ -5,9 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result, bail};
 use loadout_audit::Finding;
+use loadout_core::resolve::Placement;
 use loadout_git::Git;
 use loadout_model::config::normalize_url;
-use loadout_model::{Config, Lock, SourceSub};
+use loadout_model::{Config, Lock, RankOrigin, SourceSub};
 
 use crate::membership::{self, LoadedCompanyConfig};
 use crate::paths::Paths;
@@ -55,6 +56,23 @@ pub struct Planned {
     pub manual: bool,
     /// The source whose `upstream:` pulled this one in.
     pub via: Option<String>,
+    /// Where its subscriber put it (`layer` / `rank`), overriding its items'
+    /// own layers.
+    pub placement: Option<Placement>,
+    /// Display name from its subscription.
+    pub label: Option<String>,
+}
+
+impl Planned {
+    fn new(sub: SourceSub, manual: bool) -> Self {
+        Planned {
+            sub,
+            manual,
+            via: None,
+            placement: None,
+            label: None,
+        }
+    }
 }
 
 /// A loaded source at the commit being installed.
@@ -70,6 +88,8 @@ pub struct Fetched {
     pub updated_from: Option<String>,
     /// The source whose `upstream:` pulled this one in.
     pub via: Option<String>,
+    pub placement: Option<Placement>,
+    pub label: Option<String>,
 }
 
 /// Everything loading produced.
@@ -86,8 +106,9 @@ pub struct Loaded {
 }
 
 /// Company config (company layer) + the sources of every group in the profile +
-/// manual subscriptions (subject to `allow_manual_sources`). A manual
-/// subscription to a company config-listed URL only contributes its priority/ref.
+/// manual subscriptions (subject to `allow_manual_sources`). A `[[source]]`
+/// for a company config-listed URL only contributes where it sits (label,
+/// layer, rank, priority) and its ref.
 pub fn source_list(
     config: &Config,
     company_config: Option<&LoadedCompanyConfig>,
@@ -96,11 +117,7 @@ pub fn source_list(
     let mut out: Vec<Planned> = Vec::new();
     if let Some(c) = company_config {
         let ch = &c.company_config;
-        out.push(Planned {
-            sub: company_config_sub(c),
-            manual: false,
-            via: None,
-        });
+        out.push(Planned::new(company_config_sub(c), false));
         let profile = membership::cached_profile(config);
         for group in ch
             .groups
@@ -108,25 +125,27 @@ pub fn source_list(
             .filter(|u| profile.contains(&u.layer, &u.name))
         {
             for url in &group.sources {
-                out.push(Planned {
-                    sub: SourceSub {
+                out.push(Planned::new(
+                    SourceSub {
                         layer: Some(group.layer.clone()),
                         group: Some(group.name.clone()),
                         ..SourceSub::new(url.clone())
                     },
-                    manual: false,
-                    via: None,
-                });
+                    false,
+                ));
             }
         }
     }
     for sub in &config.sources {
         let url = normalize_url(&sub.url);
+        let placement = placement_of(sub.layer.as_deref(), sub.rank, None);
         if let Some(existing) = out.iter_mut().find(|p| normalize_url(&p.sub.url) == url) {
-            existing.sub.priority = existing.sub.priority.max(sub.priority);
+            existing.sub.priority = sub.priority;
             if sub.git_ref.is_some() {
                 existing.sub.git_ref.clone_from(&sub.git_ref);
             }
+            existing.label.clone_from(&sub.label);
+            existing.placement = allowed_placement(placement, &sub.url, company_config, warnings);
             continue;
         }
         if let Some(c) = company_config
@@ -140,15 +159,47 @@ pub fn source_list(
             continue;
         }
         out.push(Planned {
-            sub: sub.clone(),
-            manual: true,
-            via: None,
+            placement,
+            label: sub.label.clone(),
+            ..Planned::new(sub.clone(), true)
         });
     }
     // The same URL listed by two groups: keep the first.
     let mut seen = BTreeSet::new();
     out.retain(|p| seen.insert(normalize_url(&p.sub.url)));
     out
+}
+
+/// A subscription's `layer` / `rank` as a placement, if it sets either.
+fn placement_of(layer: Option<&str>, rank: Option<i64>, via: Option<&str>) -> Option<Placement> {
+    (layer.is_some() || rank.is_some()).then(|| Placement {
+        layer: layer.map(str::to_owned),
+        rank,
+        from: RankOrigin::Subscription {
+            upstream_of: via.map(str::to_owned),
+        },
+    })
+}
+
+/// `placement`, unless the company config lists `url` (or is it) and
+/// forbids re-ranking its sources.
+fn allowed_placement(
+    placement: Option<Placement>,
+    url: &str,
+    company_config: Option<&LoadedCompanyConfig>,
+    warnings: &mut Vec<String>,
+) -> Option<Placement> {
+    let Some(c) = company_config else {
+        return placement;
+    };
+    let listed = c.company_config.lists_source(url) || normalize_url(url) == normalize_url(&c.url);
+    if placement.is_some() && listed && !c.company_config.policy.allow_local_ranks {
+        warnings.push(format!(
+            "{url}: the company config doesn't allow re-ranking the sources it lists; its layer and rank are kept"
+        ));
+        return None;
+    }
+    placement
 }
 
 /// The company config repo as a source: company layer, the company group.
@@ -209,6 +260,8 @@ fn load_all(
                             .map(|w| format!("{}: {w}", f.scanned.manifest.name)),
                     );
                     f.via.clone_from(&p.via);
+                    f.placement.clone_from(&p.placement);
+                    f.label.clone_from(&p.label);
                     loaded.sources.push(f);
                 }
                 loaded.pending.extend(one.pending);
@@ -231,7 +284,10 @@ pub fn sort_sources(sources: &mut [Fetched]) {
 /// The sources named in the `upstream:` of `fetched` that aren't in `seen`
 /// yet. An upstream the company config lists gets that group's layer and group and
 /// counts as company config-derived; any other one is a manual source (subject to
-/// `allow_manual_sources`, never auto-applied).
+/// `allow_manual_sources`, never auto-applied). The entry's `label`,
+/// `layer`, `rank` and `priority` say where it sits for this source's
+/// subscribers; a `[[source]]` of your own for the URL wins over them (it
+/// is already in `seen`).
 pub fn upstream_plan(
     fetched: &[&Fetched],
     seen: &mut BTreeSet<String>,
@@ -262,16 +318,24 @@ pub fn upstream_plan(
                 ));
                 continue;
             }
+            let placement = allowed_placement(
+                placement_of(up.layer(), up.rank(), Some(from)),
+                &url,
+                company_config,
+                warnings,
+            );
             let sub = SourceSub {
                 layer: listed.map(|u| u.layer.clone()),
                 group: listed.map(|u| u.name.clone()),
                 git_ref: up.git_ref().map(str::to_owned),
+                priority: up.priority().unwrap_or(0),
                 ..SourceSub::new(url)
             };
             out.push(Planned {
-                sub,
-                manual: listed.is_none(),
                 via: Some(from.clone()),
+                placement,
+                label: up.label().map(str::to_owned),
+                ..Planned::new(sub, listed.is_none())
             });
         }
     }
@@ -323,6 +387,45 @@ pub fn load_upstreams(
         frontier = (start..loaded.sources.len()).collect();
     }
     sort_sources(&mut loaded.sources);
+    fill_from_upstream_entries(loaded, company_config);
+}
+
+/// A source you subscribed to yourself that another loaded source also
+/// names as `upstream:` takes that entry's label, layer, rank and priority
+/// for whatever your own `[[source]]` doesn't set: labelling an upstream
+/// shouldn't drop the rank its downstream gave it.
+fn fill_from_upstream_entries(loaded: &mut Loaded, company_config: Option<&LoadedCompanyConfig>) {
+    // URL → (the entry, the source naming it); the first by source name,
+    // so the result doesn't depend on load order.
+    let mut entries: BTreeMap<String, (loadout_model::Upstream, String)> = BTreeMap::new();
+    for f in &loaded.sources {
+        for up in &f.scanned.manifest.upstream {
+            entries
+                .entry(normalize_url(&up.resolve(&f.sub.url)))
+                .or_insert_with(|| (up.clone(), f.scanned.manifest.name.clone()));
+        }
+    }
+    let mut warnings = Vec::new();
+    for f in loaded.sources.iter_mut().filter(|f| f.via.is_none()) {
+        let Some((up, from)) = entries.get(&normalize_url(&f.sub.url)) else {
+            continue;
+        };
+        if f.label.is_none() {
+            f.label = up.label().map(str::to_owned);
+        }
+        if f.placement.is_none() {
+            f.placement = allowed_placement(
+                placement_of(up.layer(), up.rank(), Some(from)),
+                &f.sub.url,
+                company_config,
+                &mut warnings,
+            );
+        }
+        if f.sub.priority == 0 {
+            f.sub.priority = up.priority().unwrap_or(0);
+        }
+    }
+    loaded.warnings.append(&mut warnings);
 }
 
 /// The result of loading one source.
@@ -372,6 +475,8 @@ pub fn load_one(
             scanned,
             updated_from: from,
             via: None,
+            placement: None,
+            label: None,
         };
     let applied = applied_commit(git, paths, opts.lock, &sub.url);
     match opts.fetch {

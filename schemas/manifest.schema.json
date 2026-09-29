@@ -19,6 +19,13 @@
       "description": "Default layer for items in this repo.",
       "type": "string"
     },
+    "layers": {
+      "description": "Suggested ranks for layers this source uses, e.g. its own\n`{ name: beta, rank: 27 }`. The company config's layers and your\n`config.toml` override them; when two sources disagree, the higher\nrank is used.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Layer"
+      }
+    },
     "group": {
       "description": "Default group. Required unless the company config maps this source to a group.",
       "type": [
@@ -87,6 +94,23 @@
   ],
   "additionalProperties": true,
   "$defs": {
+    "Layer": {
+      "description": "A layer type with its rank (specificity); higher ranks win ties.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "name",
+        "rank"
+      ]
+    },
     "LoadoutBlock": {
       "description": "The `loadout:` block in item frontmatter, also used for `LOADOUT.md`\n`defaults:`. Every field is optional; unset fields fall back to the\nsource defaults, then to built-in defaults.",
       "type": "object",
@@ -226,7 +250,7 @@
       }
     },
     "Upstream": {
-      "description": "An entry of `upstream:`: a Git URL (or path), optionally with a ref.\nA URL starting with `./` or `../` is relative to the declaring source's\nown URL, like a Git submodule URL (`../eng-skills` is a sibling repo).",
+      "description": "An entry of `upstream:`: a Git URL (or path), optionally with a ref and\nwhere it sits for this source's subscribers.\nA URL starting with `./` or `../` is relative to the declaring source's\nown URL, like a Git submodule URL (`../eng-skills` is a sibling repo).",
       "anyOf": [
         {
           "type": "string"
@@ -243,6 +267,36 @@
                 "string",
                 "null"
               ]
+            },
+            "label": {
+              "description": "Display name for the upstream.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "layer": {
+              "description": "Rank all its items at this layer, their own `layer:` included.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rank": {
+              "description": "Rank all its items at exactly this rank.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "priority": {
+              "description": "Tie-breaker among equal-rank sources; higher wins.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
             }
           },
           "required": [
@@ -277,7 +331,8 @@
           "default": {
             "auto_apply": [],
             "require_signed": [],
-            "allow_manual_sources": true
+            "allow_manual_sources": true,
+            "allow_local_ranks": true
           }
         },
         "secrets": {
@@ -310,23 +365,6 @@
       "required": [
         "name",
         "layers"
-      ]
-    },
-    "Layer": {
-      "description": "A layer type with its rank (specificity); higher ranks win ties.",
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "rank": {
-          "type": "integer",
-          "format": "int64"
-        }
-      },
-      "required": [
-        "name",
-        "rank"
       ]
     },
     "GroupDef": {
@@ -491,6 +529,11 @@
         },
         "allow_manual_sources": {
           "description": "May users subscribe to repos not listed in the company config?",
+          "type": "boolean",
+          "default": true
+        },
+        "allow_local_ranks": {
+          "description": "May users re-rank the company config's layers (`[layers]` in\n`config.toml`) and the sources it lists (`rank` / `layer` on a\n`[[source]]` or `upstream:` entry)? Locks are never affected by a\nre-rank either way.",
           "type": "boolean",
           "default": true
         }

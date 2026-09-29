@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use loadout_core::resolve::Resolution;
-use loadout_model::{ItemId, ItemKind, LinkMode};
+use loadout_model::{ItemId, ItemKind, Layer, LinkMode};
 use loadout_targets::fsutil::atomic_write;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,10 @@ pub struct Resolved {
     pub resolution: Resolution,
     /// Target id → the entries it should contain.
     pub placements: BTreeMap<String, Vec<Placement>>,
+    /// Each synced source's `layers:` suggestions, by source name (for
+    /// `lo layers` between syncs).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layer_suggestions: Vec<(String, Vec<Layer>)>,
 }
 
 /// An enabled winner's entry in one target.
@@ -45,6 +49,7 @@ impl Default for Resolved {
             items: Vec::new(),
             resolution: Resolution::default(),
             placements: BTreeMap::new(),
+            layer_suggestions: Vec::new(),
         }
     }
 }
@@ -71,6 +76,25 @@ pub struct ResolvedSource {
     /// at `url` (see `nested:`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// Display name from its subscription (`label`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// The layer its subscription ranks it at (`layer`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed_at: Option<String>,
+    /// The exact rank its subscription gives it (`rank`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<i64>,
+    /// Where `placed_at` / `rank` came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed_by: Option<loadout_model::RankOrigin>,
+    /// Tie-breaker among equal-rank sources.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub priority: i64,
+}
+
+fn is_zero(n: &i64) -> bool {
+    *n == 0
 }
 
 impl ResolvedSource {
@@ -92,6 +116,9 @@ pub struct ResolvedItem {
     pub kind: ItemKind,
     pub name: String,
     pub source: String,
+    /// The source's display name from its subscription (`label`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub layer: String,

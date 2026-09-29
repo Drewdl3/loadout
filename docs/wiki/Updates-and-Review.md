@@ -1,8 +1,8 @@
 # Updates and review
 
 Instructions for AI assistants are powerful, so Loadout treats updates
-carefully: everything is pinned, checked, and, unless your company says
-otherwise, shown to you before it's installed.
+carefully: everything is pinned, checked, and, unless you (or your company
+config) say otherwise, shown to you before it's installed.
 
 ## What `lo sync` does
 
@@ -10,8 +10,8 @@ otherwise, shown to you before it's installed.
 2. **Plan**: work out what would change for you (items added, removed or
    changed).
 3. **Audit** the changes (see below).
-4. **Apply** the changes your company auto-applies (usually the `company`
-   layer). Everything else **waits for your review**.
+4. **Apply** the changes you, or your company config, auto-apply (usually
+   the `company` layer). Everything else **waits for your review**.
 
 It's always safe to run. If nothing changed, nothing happens.
 
@@ -36,7 +36,7 @@ apply).
   auto-apply your own list in `config.toml`:
   ```toml
   [policy]
-  auto_apply = ["team"]
+  auto_apply = ["payments-skills"]   # source names or URLs
   ```
 
 ## The safety audit

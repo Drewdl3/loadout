@@ -3,9 +3,9 @@
 use std::collections::BTreeMap;
 
 use loadout_core::resolve::{
-    Candidate, EnabledBy, Input, Outcome, Resolution, Rule, Warning, resolve,
+    Candidate, EnabledBy, Input, Outcome, Placement, Resolution, Rule, Warning, resolve,
 };
-use loadout_model::{ItemId, LayerModel, Mode, Profile};
+use loadout_model::{ItemId, LayerModel, Mode, Profile, RankOrigin};
 use proptest::prelude::*;
 
 /// A candidate `source:skill/<name>` at `layer`/`group`.
@@ -21,7 +21,19 @@ fn cand(source: &str, name: &str, layer: &str, group: &str) -> Candidate {
         targets: None,
         priority: 0,
         content_hash: format!("blake3:{source}"),
+        label: None,
+        placement: None,
     }
+}
+
+/// Your `[[source]]` puts the candidate's source at `rank`.
+fn placed(mut c: Candidate, layer: Option<&str>, rank: Option<i64>) -> Candidate {
+    c.placement = Some(Placement {
+        layer: layer.map(str::to_owned),
+        rank,
+        from: RankOrigin::Subscription { upstream_of: None },
+    });
+    c
 }
 
 fn developer() -> Profile {
@@ -362,6 +374,99 @@ fn trail_lists_winner_first_then_by_id() {
     assert_eq!(ids, ["c-src:skill/x", "a-src:skill/x", "b-src:skill/x"]);
 }
 
+// A subscription's rank puts a source above a more specific layer.
+#[test]
+fn placement_rank_overrides_the_layer_rank() {
+    let r = Case::new().run(&[
+        placed(cand("beta", "x", "team", "payments-dev"), None, Some(45)),
+        cand("roles", "x", "role", "developer"),
+    ]);
+    assert_eq!(winner(&r, "x").as_deref(), Some("beta:skill/x"));
+    let t = &r.items[0].candidates[0];
+    assert_eq!(t.rank, Some(45));
+    assert_eq!(t.lock_rank, Some(20));
+    assert_eq!(
+        t.rank_from,
+        Some(RankOrigin::Subscription { upstream_of: None })
+    );
+}
+
+// A subscription's layer re-ranks items that name their own layer too.
+#[test]
+fn placement_layer_applies_to_item_level_layers() {
+    let r = Case::new().run(&[
+        placed(
+            cand("beta", "x", "role", "developer"),
+            Some("company"),
+            None,
+        ),
+        cand("payments", "x", "team", "payments-dev"),
+    ]);
+    assert_eq!(winner(&r, "x").as_deref(), Some("payments:skill/x"));
+    let beta = r.items[0]
+        .candidates
+        .iter()
+        .find(|t| t.id == id("beta:skill/x"))
+        .unwrap();
+    assert_eq!(beta.rank, Some(0));
+    assert_eq!(beta.placed_at.as_deref(), Some("company"));
+    // Membership is still checked at the item's own layer.
+    assert_eq!(beta.layer, "role");
+
+    let r = Case::new().run(&[placed(cand("beta", "x", "team", "t"), Some("nope"), None)]);
+    assert_eq!(outcome_of(&r, "x", "beta:skill/x"), &Outcome::UnknownLayer);
+    assert!(r.warnings.contains(&Warning::UnknownLayer {
+        id: id("beta:skill/x"),
+        layer: "nope".into()
+    }));
+}
+
+// Re-ranking a locked company item's source below the team doesn't free
+// the team to override it, and re-ranking a random source above the
+// company doesn't give its lock precedence.
+#[test]
+fn locks_use_the_declared_rank() {
+    let mut company = placed(cand("acme", "x", "company", "acme"), None, Some(45));
+    company.locked = true;
+    let r = Case::new().run(&[company, cand("payments", "x", "team", "payments-dev")]);
+    assert_eq!(winner(&r, "x").as_deref(), Some("acme:skill/x"));
+    assert_eq!(r.items[0].rule, Some(Rule::Locked));
+    let t = &r.items[0].candidates[0];
+    assert!(t.rerank_ignored);
+    assert_eq!((t.rank, t.lock_rank), (Some(45), Some(0)));
+
+    let mut company = cand("acme", "y", "company", "acme");
+    company.locked = true;
+    let mut random = placed(cand("random", "y", "team", "platform"), None, Some(-10));
+    random.locked = true;
+    let r = Case::new().run(&[company, random]);
+    assert_eq!(winner(&r, "y").as_deref(), Some("acme:skill/y"));
+    assert_eq!(
+        outcome_of(&r, "y", "random:skill/y"),
+        &Outcome::BlockedOverride {
+            by: id("acme:skill/y")
+        }
+    );
+}
+
+// Re-ranking a layer in config.toml doesn't move its locks either.
+#[test]
+fn local_layer_ranks_do_not_move_locks() {
+    let mut case = Case::new();
+    case.layers.override_rank("company", 99);
+    let mut company = cand("acme", "x", "company", "acme");
+    company.locked = true;
+    let r = case.run(&[company, cand("payments", "x", "team", "payments-dev")]);
+    assert_eq!(winner(&r, "x").as_deref(), Some("acme:skill/x"));
+    // Without a lock, the re-rank counts.
+    let r = case.run(&[
+        cand("acme", "y", "company", "acme"),
+        cand("payments", "y", "team", "payments-dev"),
+    ]);
+    assert_eq!(winner(&r, "y").as_deref(), Some("acme:skill/y"));
+    assert_eq!(r.items[0].rule, Some(Rule::HighestRank));
+}
+
 fn arb_candidate() -> impl Strategy<Value = Candidate> {
     let sources = prop::sample::select(vec!["s-a", "s-b", "s-c", "s-d"]);
     let names = prop::sample::select(vec!["x", "y"]);
@@ -383,6 +488,7 @@ fn arb_candidate() -> impl Strategy<Value = Candidate> {
         vec!["pi".to_owned()],
         vec!["claude-code".to_owned()],
     ]));
+    let placement = prop::option::of(arb_placement());
     (
         sources,
         names,
@@ -393,10 +499,12 @@ fn arb_candidate() -> impl Strategy<Value = Candidate> {
         0i64..3,
         targets,
         any::<bool>(),
+        placement,
     )
         .prop_map(
-            |(src, name, (layer, group), mode, locked, overridable, priority, targets, pm)| {
+            |(src, name, (layer, group), mode, locked, overridable, priority, targets, pm, at)| {
                 let mut c = cand(src, name, layer, group);
+                c.placement = at;
                 c.mode = mode;
                 c.locked = locked;
                 c.overridable = overridable;
@@ -410,7 +518,61 @@ fn arb_candidate() -> impl Strategy<Value = Candidate> {
         )
 }
 
+/// A subscription's layer and/or rank, at known layers.
+fn arb_placement() -> impl Strategy<Value = Placement> {
+    let layers = prop::option::of(prop::sample::select(vec![
+        "company", "team", "role", "user",
+    ]));
+    (layers, prop::option::of(-20i64..80)).prop_map(|(layer, rank)| Placement {
+        layer: layer.map(str::to_owned),
+        rank,
+        from: RankOrigin::Subscription { upstream_of: None },
+    })
+}
+
 proptest! {
+    // re-ranking sources or layers never changes the winner of a locked item.
+    #[test]
+    fn rerank_never_changes_a_locked_winner(
+        cands in prop::collection::vec(arb_candidate(), 0..12),
+        placements in prop::collection::vec(prop::option::of(arb_placement()), 4),
+        local in prop::collection::vec(prop::option::of(-20i64..80), 4),
+    ) {
+        // A layer nothing declares has no declared rank to hold locks at.
+        let mut seen = std::collections::BTreeSet::new();
+        let cands: Vec<Candidate> = cands
+            .into_iter()
+            .filter(|c| c.layer != "nope" && seen.insert(c.id.clone()))
+            .map(|mut c| { c.placement = None; c })
+            .collect();
+        let base = Case::new().run(&cands);
+
+        let mut reranked = Case::new();
+        for (layer, rank) in ["company", "org", "team", "role"].iter().zip(&local) {
+            if let Some(r) = rank {
+                reranked.layers.override_rank(layer, *r);
+            }
+        }
+        let sources = ["s-a", "s-b", "s-c", "s-d"];
+        let moved: Vec<Candidate> = cands
+            .iter()
+            .cloned()
+            .map(|mut c| {
+                let i = sources.iter().position(|s| *s == c.id.source()).unwrap();
+                c.placement = placements[i].clone();
+                c
+            })
+            .collect();
+        let after = reranked.run(&moved);
+        for item in &base.items {
+            let Some(w) = &item.winner else { continue };
+            let t = item.candidates.iter().find(|t| &t.id == w).unwrap();
+            if t.locked || !t.overridable {
+                prop_assert_eq!(&after.get(&item.key).unwrap().winner, &item.winner);
+            }
+        }
+    }
+
     // permuting source order never changes output.
     #[test]
     fn output_is_independent_of_candidate_order(

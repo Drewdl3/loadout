@@ -66,6 +66,14 @@
         "type": "string"
       }
     },
+    "layers": {
+      "description": "Your own layer ranks (`lo layers set`): layer → rank. They override\nthe defaults, your sources' suggestions and the company config's.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "format": "int64"
+      }
+    },
     "targets": {
       "$ref": "#/$defs/TargetsConfig",
       "default": {
@@ -97,13 +105,21 @@
       ]
     },
     "SourceSub": {
-      "description": "A manual source subscription (`[[source]]`).",
+      "description": "A source subscription (`[[source]]`). For a URL the company config\nlists, the entry only changes where that source sits (`label`,\n`layer`, `rank`, `priority`, `ref`). For another source's upstream, it\nsubscribes you to that upstream directly, placed as it says.",
       "type": "object",
       "properties": {
         "url": {
           "type": "string"
         },
+        "label": {
+          "description": "Display name, shown instead of the source's own name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "layer": {
+          "description": "Rank every item at this layer, items that set their own `layer:`\nincluded.",
           "type": [
             "string",
             "null"
@@ -114,6 +130,14 @@
             "string",
             "null"
           ]
+        },
+        "rank": {
+          "description": "Rank every item at exactly this rank, whatever its layer's rank.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
         },
         "priority": {
           "description": "Tie-breaker among equal-rank sources; higher wins.",

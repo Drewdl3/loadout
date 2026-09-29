@@ -47,15 +47,19 @@ impl Report for ListReport {
         if self.items.is_empty() {
             return writeln!(out, "No items.");
         }
+        let shown = |i: &ResolvedItem| match &i.source_label {
+            Some(l) => format!("{} ({l})", i.id),
+            None => i.id.to_string(),
+        };
         let width = self
             .items
             .iter()
-            .map(|i| i.id.to_string().len())
+            .map(|i| shown(i).chars().count())
             .max()
             .unwrap_or(0);
         for i in &self.items {
             let mark = if i.enabled { "on " } else { "off" };
-            let id = i.id.to_string();
+            let id = shown(i);
             match &i.description {
                 Some(d) => writeln!(out, "{mark}  {id:<width$}  {}", one_line(d))?,
                 None => writeln!(out, "{mark}  {id}")?,

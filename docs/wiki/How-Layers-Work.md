@@ -5,12 +5,15 @@ and "why is it the Payments version and not Engineering's?"
 
 ## The short version
 
-- You get items from **the groups you're in**.
-- Groups are stacked as **layers**, from the whole company (broadest) down to
-  you (most specific).
+- You get items from **the sources you're connected to** (and the ones they
+  build on), for **the groups you're in**.
+- Groups are stacked as **layers**, from the broadest (say, the whole
+  company) down to you (most specific).
 - When two layers have an item **with the same name**, the one **closer to
   you wins**.
 - Except: a layer can **lock** an item, and then nobody below can replace it.
+- The ranks come from Loadout's defaults, your sources and your company
+  config if you have one, and **you can change them for yourself**.
 
 ## A worked example
 
@@ -33,6 +36,8 @@ acme  →  org: eng  →  team: payments-dev  →  role: developer  →  you
 **In the web UI**, open **Your layers**. It shows:
 
 - **Your chain**: the groups you're in, broadest to most specific.
+- **Ranks**: every layer with its rank and where the rank came from. Drag a
+  layer, or type a rank, to re-rank it for yourself.
 - One card per layer, in rank order, with each group you're in and every item
   it shares.
 - For each item, its status (**On**, **Off**, **Replaced**) and what happened:
@@ -53,27 +58,33 @@ lo why skill/write-spec
 skill/write-spec — enabled (default)
 winner: payments-skills:skill/write-spec (most specific layer)
 candidates:
-  ✓ payments-skills:skill/write-spec  team:payments-dev (rank 20, priority 0) — winner
-  ✗ eng-skills:skill/write-spec       org:eng (rank 10, priority 0) — outranked by payments-skills:skill/write-spec
+  ✓ payments-skills:skill/write-spec  team:payments-dev (rank 20 from the company config, priority 0) — winner
+  ✗ eng-skills:skill/write-spec       org:eng (rank 10 from the company config, priority 0) — outranked by payments-skills:skill/write-spec
 targets:
   claude-code: ~/.claude/skills/write-spec (link)
 ```
 
-The `targets` lines say where the winning item is installed in each AI tool.
+Each rank says where it came from: the built-in defaults, a source's
+`LOADOUT.md`, the company config, your `[layers]`, or where you (or an
+`upstream:` entry) placed that source. The `targets` lines say where the
+winning item is installed in each AI tool.
 
 ## The rules in full
 
 For each item name (like `skill/write-spec`), Loadout:
 
 1. **Collects** every version from every source you use. Each version has a
-   layer and group, from its own `loadout:` block or its source's `LOADOUT.md`.
+   layer and group, from its own `loadout:` block or its source's `LOADOUT.md`,
+   and a rank: its layer's rank, unless its source was placed at another
+   layer or rank (see [Ranking things yourself](#ranking-things-yourself)).
 2. **Keeps only the ones meant for you**: you're in its group, its
    `applies_to` filter (if any) matches you, and it's allowed in the AI tool
    being installed into.
 3. **Picks one winner:**
    1. If any version is `locked: true` or `overridable: false`, the
       **broadest** such version wins outright. Attempts to replace it from
-      below are ignored, with a warning.
+      below are ignored, with a warning. Locks are compared at the rank their
+      layer was *declared* at, so re-ranking can't get around them.
    2. Otherwise the **most specific** (highest-rank) version wins.
    3. If two versions are at the **same rank**, the one from the source with
       the higher `priority` wins. If that's also tied, it's a **conflict**:
@@ -117,6 +128,59 @@ Other fields:
 The full format is in [`docs/agents.md`](../agents.md) and
 [`schemas/item-block.schema.json`](../../schemas/item-block.schema.json).
 
+## Where ranks come from
+
+Each layer's rank is merged from, later ones winning:
+
+1. Loadout's built-in ranks (`company` 0, `org` 10, `team` 20, `product`
+   25, `squad` 30, `project` 35, `role` 40, `user` 50);
+2. the `layers:` of your sources' `LOADOUT.md` files, so a team can bring
+   a layer of its own, like `{ name: beta, rank: 27 }` (if two sources
+   disagree, the higher rank is used, with a warning);
+3. the company config's layers, if you have one;
+4. your own `[layers]` in `config.toml`.
+
+`lo layers` lists them all:
+
+```text
+Layers, broadest first (higher rank wins):
+  company      0  from the built-in defaults
+  org         10  from the built-in defaults
+  team        20  from the built-in defaults
+  beta        27  from beta-skills's LOADOUT.md
+  …
+  user        50  from the built-in defaults
+```
+
+## Ranking things yourself
+
+Everything about ranks can be changed for yourself, without asking anyone:
+
+```sh
+lo layers set beta=15                     # re-rank a whole layer
+lo layers unset beta                      # back to its declared rank
+lo source set beta-skills --rank 35       # rank one source's items at 35
+lo source set beta-skills --layer product # …or at the product layer's rank
+lo source set beta-skills --label "Beta (payments)"
+lo source set payments-skills --priority 10   # wins ties at the same rank
+lo source unset beta-skills --rank --label
+```
+
+A source's `--layer` or `--rank` applies to all of its items, even those
+that name their own layer. It works for any source you get: ones you
+subscribed to, upstreams, and ones your company config lists (unless the
+company config sets `allow_local_ranks: false`). A team can do the same for
+its subscribers in its `upstream:` entries; your own setting wins.
+
+In the web UI, use **Place…** on the **Sources** page, and **Ranks** on
+**Your layers**. Changes apply straight away.
+
+**Locks don't move.** A locked item is compared at the rank its source
+declared, whatever you've re-ranked. Moving the company's source below your
+team doesn't let the team replace a locked company skill, and moving some
+other source above the company doesn't let *its* lock win. `lo why` says
+so when that happens.
+
 ## Your own layer
 
 A **personal source** (`layer: user`) is a layer just for you, and it outranks
@@ -134,10 +198,10 @@ usual reasons: the item has an `applies_to` that doesn't match you, it's
 `default-off`, a locked version from a broader layer wins, or it's limited to
 other AI tools with `targets`.
 
-**I want the Engineering version, not the team's.** You can only choose
-between versions at the *same* rank (`lo prefer`, or **Use this version**
-in the UI). A more specific layer winning is by design; ask the team to
-remove or rename theirs, or put your preferred text in your personal layer.
+**I want the Engineering version, not the team's.** Re-rank Engineering's
+source above the team's for yourself: `lo source set eng-skills --rank 25`
+(or **Place…** on the **Sources** page). Between versions at the *same*
+rank, choose with `lo prefer` (or **Use this version** in the UI).
 
 **I can't turn something off.** It's `required` or `locked`. Those are for
 things like security rules; ask the source's owners.

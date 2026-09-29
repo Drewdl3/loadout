@@ -10,8 +10,7 @@ use loadout_core::resolve::{self, Candidate, Resolution};
 use loadout_git::Git;
 use loadout_model::config::normalize_url;
 use loadout_model::{
-    Config, Groups, ItemId, ItemKind, LayerModel, LinkMode, Lock, LockedItem, LockedSource,
-    Profile, SourceSub,
+    Config, Groups, ItemId, ItemKind, LinkMode, Lock, LockedItem, LockedSource, Profile, SourceSub,
 };
 use loadout_targets::fsutil::atomic_write;
 use loadout_targets::owned::OwnedFile;
@@ -333,9 +332,15 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
         report.warnings.push(p);
     }
     let mut subs = source_list(config, company_config.as_ref(), &mut report.warnings);
-    // The company config was reviewed above; use that result.
-    if let Some(f) = &company_config_fetched {
+    // The company config was reviewed above; use that result, placed and
+    // labelled as planned.
+    if let Some(f) = &mut company_config_fetched {
         let url = normalize_url(&f.sub.url);
+        if let Some(p) = subs.iter().find(|p| normalize_url(&p.sub.url) == url) {
+            f.placement.clone_from(&p.placement);
+            f.label.clone_from(&p.label);
+            f.sub.priority = p.sub.priority;
+        }
         subs.retain(|p| normalize_url(&p.sub.url) != url);
     }
     let load_opts = LoadOptions {
@@ -377,17 +382,16 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
         .collect();
     let candidates: Vec<Candidate> = fetched
         .iter()
-        .flat_map(|f| {
-            f.scanned
-                .items
-                .iter()
-                .map(move |i| candidate(i, f.sub.priority))
-        })
+        .flat_map(|f| f.scanned.items.iter().map(move |i| candidate(i, f)))
         .collect();
 
-    let layers = company_config
-        .as_ref()
-        .map_or_else(LayerModel::default, |c| c.company_config.layer_model());
+    let layer_suggestions = crate::layers::suggestions(&fetched);
+    let (layers, layer_warnings) = crate::layers::model(
+        config,
+        company_config.as_ref().map(|c| &c.company_config),
+        &layer_suggestions,
+    );
+    report.warnings.extend(layer_warnings);
     let mut profile = effective_profile(config, &fetched);
     if let Some(c) = &company_config {
         profile.add("company", c.company_config.name.as_str());
@@ -692,6 +696,11 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
                         layer: n.default_layer.clone(),
                         group: n.default_group.clone(),
                         path: Some(n.path.clone()),
+                        label: None,
+                        placed_at: None,
+                        rank: None,
+                        placed_by: None,
+                        priority: f.sub.priority,
                     })
                     .collect();
                 std::iter::once(root_source(f)).chain(nested)
@@ -707,6 +716,7 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
             .collect(),
         resolution: overall,
         placements,
+        layer_suggestions,
         ..Resolved::default()
     };
     testhook::crash_point("before-resolved");
@@ -752,6 +762,11 @@ fn root_source(f: &Fetched) -> ResolvedSource {
             .clone()
             .or_else(|| f.scanned.manifest.group.clone()),
         path: None,
+        label: f.label.clone(),
+        placed_at: f.placement.as_ref().and_then(|p| p.layer.clone()),
+        rank: f.placement.as_ref().and_then(|p| p.rank),
+        placed_by: f.placement.as_ref().map(|p| p.from.clone()),
+        priority: f.sub.priority,
     }
 }
 
@@ -778,6 +793,11 @@ fn list_item(item: &ScannedItem, r: &resolve::Resolved) -> ResolvedItem {
         kind: key.kind(),
         name: key.name().to_owned(),
         source: item.id.source().to_owned(),
+        source_label: r
+            .candidates
+            .iter()
+            .find(|t| t.id == item.id)
+            .and_then(|t| t.label.clone()),
         description: item.meta.description.clone(),
         layer: item.loadout.layer.clone().unwrap_or_default(),
         group: item.loadout.group.clone(),
@@ -789,8 +809,11 @@ fn list_item(item: &ScannedItem, r: &resolve::Resolved) -> ResolvedItem {
     }
 }
 
-fn candidate(item: &ScannedItem, priority: i64) -> Candidate {
+/// An item as a resolution candidate. The subscription's placement and
+/// label apply to the repo's root source, not its nested ones.
+fn candidate(item: &ScannedItem, f: &Fetched) -> Candidate {
     let g = &item.loadout;
+    let root = item.id.source() == f.scanned.manifest.name;
     Candidate {
         id: item.id.clone(),
         layer: g.layer.clone().unwrap_or_default(),
@@ -800,8 +823,10 @@ fn candidate(item: &ScannedItem, priority: i64) -> Candidate {
         locked: g.locked.unwrap_or(false),
         overridable: g.overridable.unwrap_or(true),
         targets: g.targets.clone(),
-        priority,
+        priority: f.sub.priority,
         content_hash: item.content_hash.clone(),
+        label: f.label.clone().filter(|_| root),
+        placement: f.placement.clone().filter(|_| root),
     }
 }
 

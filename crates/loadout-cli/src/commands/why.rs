@@ -132,11 +132,18 @@ impl Report for WhyReport {
             } else {
                 "✗"
             };
-            let at = match &c.group {
+            let mut at = match &c.group {
                 Some(u) => format!("{}:{u}", c.layer),
                 None => c.layer.clone(),
             };
-            let rank = c.rank.map_or("?".into(), |r| r.to_string());
+            if let Some(p) = &c.placed_at {
+                write!(at, ", placed at {p}")?;
+            }
+            let rank = match (c.rank, &c.rank_from) {
+                (Some(r), Some(from)) => format!("rank {r} from {from}"),
+                (Some(r), None) => format!("rank {r}"),
+                (None, _) => "rank ?".to_owned(),
+            };
             let mut flags = Vec::new();
             if c.locked {
                 flags.push("locked");
@@ -149,9 +156,20 @@ impl Report for WhyReport {
             } else {
                 format!(" [{}]", flags.join(", "))
             };
+            let label = c
+                .label
+                .as_deref()
+                .map(|l| format!(" ({l})"))
+                .unwrap_or_default();
+            let ignored = match (c.rerank_ignored, c.lock_rank) {
+                (true, Some(l)) => {
+                    format!("; its re-rank doesn't count: locks compare declared rank {l}")
+                }
+                _ => String::new(),
+            };
             writeln!(
                 out,
-                "  {mark} {:<width$}  {at} (rank {rank}, priority {}){flags} — {}",
+                "  {mark} {:<width$}{label}  {at} ({rank}, priority {}){flags} — {}{ignored}",
                 c.id.to_string(),
                 c.priority,
                 outcome_text(&c.outcome)
@@ -189,7 +207,7 @@ impl Report for WhyReport {
 fn rule_text(rule: Rule) -> &'static str {
     match rule {
         Rule::Only => "only candidate",
-        Rule::Locked => "locked or not overridable at the most general layer",
+        Rule::Locked => "locked or not overridable at the most general declared rank",
         Rule::HighestRank => "most specific layer",
         Rule::Priority => "same layer rank, higher source priority",
         Rule::Preferred => "same layer rank, your `lo prefer` choice",

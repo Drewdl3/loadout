@@ -16,6 +16,14 @@ lo status                      # last sync, updates waiting, conflicts
 lo doctor                      # check this computer for problems
 ```
 
+## Getting started
+
+```sh
+lo init <url>                  # connect to a source (or company config) someone shared
+lo init                        # asks: start a source for your team or yourself, or connect
+lo init --new-source ~/loadout/payments-skills --layer team --subscribe
+```
+
 ## Groups
 
 ```sh
@@ -32,10 +40,27 @@ Joining and leaving stick, even when your groups are re-checked.
 ```sh
 lo subscribe <url> --dry-run   # preview what a source (and its upstreams) offers
 lo subscribe <url>             # add it
+lo subscribe <url> --label "Beta" --rank 27   # …named and ranked your way
 lo unsubscribe <url>
 lo info payments-skills        # a source's LOADOUT.md
 lo info skill/write-spec       # an item's text
 ```
+
+## Ranking layers and sources
+
+```sh
+lo layers                      # every layer's rank, and where it came from
+lo layers set beta=27 team=21  # rank layers yourself (config.toml [layers])
+lo layers unset beta           # back to the rank its sources declared
+lo source set beta-skills --rank 35 --label "Beta (payments)"
+lo source set payments-skills --layer product --priority 10
+lo source unset beta-skills --rank
+```
+
+`lo source` takes a source's URL, name or label, and works for upstreams and
+company-listed sources too. Both apply straight away. Locked items stay
+where their sources declared them. See
+[How layers work](How-Layers-Work.md#ranking-things-yourself).
 
 ## AI tools
 

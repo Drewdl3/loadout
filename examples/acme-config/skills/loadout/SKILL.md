@@ -1,14 +1,16 @@
 ---
 name: loadout
-description: How to use the Loadout `lo` CLI, which installs this machine's skills, MCP servers and agent configuration from the company's Git repos. Use when the user asks where a skill or MCP server comes from, why it is (or isn't) installed, to turn one on or off, to find one, or about pending configuration updates.
+description: How to use the Loadout `lo` CLI, which installs this machine's skills, MCP servers and agent configuration from the Git repos of the user's team and the teams it builds on. Use when the user asks where a skill or MCP server comes from, why it is (or isn't) installed, to turn one on or off, to find one, to connect to a team's repo, to rank sources or layers, or about pending configuration updates.
 ---
 
 # Using Loadout (`lo`)
 
 Loadout installs agent configuration (skills, MCP servers, subagents,
-rules) from repos owned by the company, org, team, product and role groups the
-user belongs to. Always pass `--json` and read the result; add `--exit-zero`
-so status codes don't abort your command.
+rules) from the source repos the user is subscribed to (usually their
+team's) and the ones those build on (`upstream:`); a company config, if
+there is one, adds the sources of the user's groups. Always pass `--json`
+and read the result; add `--exit-zero` so status codes don't abort your
+command.
 
 | Question | Command |
 |---|---|
@@ -18,6 +20,9 @@ so status codes don't abort your command.
 | Turn an item on/off | `lo enable <source:kind/name>` / `lo disable …` (required or locked items can't be disabled) |
 | Find a skill or server | `lo search "<words>" [--kind skill] [--tag t] [--role r]` (add `--all-sources` for groups the user isn't in) |
 | What would a source bring? | `lo subscribe <url> --dry-run` |
+| Connect to a link someone shared | `lo init <url> --non-interactive` (a source or a company config) |
+| Which layer wins, and why that rank? | `lo layers` |
+| Make one source or layer win over another, for this user | `lo source set <url-or-name> --rank <n>` (or `--layer`, `--priority`, `--label`), `lo layers set <layer>=<n>`; locked items never move |
 | Adapt a template for the user's team | `lo template list`, then `lo template use <t> --into <source> --set k=v` (and `lo export-source <source>` to open a PR, only when asked) |
 | Which groups am I in? | `lo profile` |
 | Something broken? | `lo doctor` |

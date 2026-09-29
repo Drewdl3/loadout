@@ -158,6 +158,13 @@
   .progress { height:6px; background:var(--sunken); border-radius:3px; overflow:hidden; margin:6px 0 4px; }
   .progress > div { height:100%; background:var(--ok); }
   .lede { font-size:15px; max-width:70ch; margin:0 0 4px; }
+  /* Ranks (Your layers) */
+  .rank-list { list-style:none; margin:8px 0 0; padding:0; }
+  .rank-row { display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--line); border-radius:7px; margin-bottom:6px; background:var(--bg); cursor:grab; flex-wrap:wrap; }
+  .rank-row.over { outline:2px dashed var(--accent); }
+  .rank-row .handle { color:var(--faint); }
+  .rank-row b { min-width:110px; }
+  .rank-row input { width:80px; }
   /* Layers */
   .layers { list-style:none; margin:0; padding:0; position:relative; }
   .layer { position:relative; padding-left:34px; margin-bottom:14px; }
@@ -312,19 +319,21 @@ const pref = {
 // "About this page" for each view: what it is, in plain words, and what to do here.
 const HELP = {
   Overview: ["A summary of what Loadout has set up for you.",
-    "Groups: Loadout works out which company, teams and roles you belong to. Each group can share skills with its members, and you get the ones for your groups."],
+    "Groups: the teams and roles whose sources you get. Connecting to a team's source puts you in its group; if your company has a company config, it can work your groups out for you."],
   Catalog: ["Every skill and tool connection your groups share, in one list. Use the search box and filters to narrow it down.",
     "On: your AI tools have it. Off: available, but turned off. Replaced: another group has its own version, and theirs is used because it's closer to you (your team beats the whole company).",
     "Click Why? on anything to see who provides it and why you have it."],
-  Layers: ["Your skills, arranged by where they come from: the whole company at the top, then smaller groups, down to you.",
+  Layers: ["Your skills, arranged by where they come from: the broadest layer at the top, then smaller groups, down to you.",
     "When two layers share something with the same name, the one lower down (closer to you) wins and the other is marked Replaced, unless a layer above has locked it.",
+    "You decide the order: drag a layer in Ranks, or type its rank. Locks stay where their sources put them, whatever you change.",
     "Click Why? on anything to see every version and the rule that picked the winner."],
   Targets: ["The AI apps Loadout can set up on this computer. Turn on the ones you use.",
     "Link (recommended) points each app at Loadout's copy, so updates show up straight away. Copy puts separate files in each app, for apps that don't follow links."],
   Review: ["Some groups ask you to look over their updates before they reach your AI tools. Read what changed, then approve it.",
     "Updates from groups that don't ask for this arrive on their own when you update."],
-  Sources: ["A source is a shared folder of skills, kept in Git. Usually each team or group has one.",
-    "If your company uses Loadout, its list of groups (the company config) adds the right sources for you. You can also add any source by its address, and preview it first."],
+  Sources: ["A source is a shared folder of skills, kept in Git. Usually each team has one, and it can build on others (its upstreams): connect to one and you get those too.",
+    "Add any source by its address, and preview it first. Use Place… to give a source your own name for it, or to choose where it ranks.",
+    "If your company keeps a company config (a list of groups and their sources), connecting to it adds the right sources for you."],
   Templates: ["A template is a skill with blanks, such as {{team}}. Pick one, answer a few questions, and you get your own copy for your team.",
     "You can also make a template for other teams: write the skill once, and mark the parts each team should fill in."],
   Share: ["Give someone your exact setup as a short code: they paste it here (or run lo import) and get the same groups, sources, on/off choices and AI tools.",
@@ -346,32 +355,128 @@ const GLOSSARY = [
   ["Tool connection (MCP server)", "Lets an AI assistant use another tool, such as Jira or a database. Passwords are never stored in the shared files."],
   ["Subagent", "A helper assistant with its own instructions, which your main assistant can hand work to."],
   ["Rule or prompt", "Shorter instructions: house rules the assistant always follows, or a saved prompt or command."],
-  ["Source", "A shared folder of skills, kept in Git. Usually one per team or group."],
-  ["Company config", "Your company's list of groups: which sources each group has, and who belongs to each. It lets Loadout set you up automatically."],
-  ["Group and layer", "A group is the company, an org, a team, a squad, a role, or just you. Layers rank them: when two groups share something with the same name, the one closest to you wins, unless a higher group has locked it."],
+  ["Source", "A shared folder of skills, kept in Git. Usually one per team. A source can build on others (its upstreams), and you get those too."],
+  ["Company config", "Optional. A list of groups, their sources and who belongs to each, which sets people up automatically. Worth adding once many teams use Loadout."],
+  ["Group and layer", "A group is a team, a squad, a role, the whole company, or just you. Layers rank them: when two groups share something with the same name, the one closest to you wins, unless a broader group has locked it. You can re-rank layers and sources for yourself."],
   ["Template", "A skill with blanks like {{team}}. Each team fills them in to get its own copy."],
   ["Update (sync)", "Downloads the latest from your sources and installs it into your AI tools. Safe to run any time."],
   ["AI tool (target)", "An AI app on this computer that Loadout sets up, such as Claude Code, Cursor or Codex."],
   ["Working copy", "Your private copy of a source, where your edits wait until you share them."],
   ["Pull request", "A proposed change that the source's owners review before it reaches everyone."],
-  ["Required and locked", "Required: can't be turned off. Locked: groups closer to you can't replace it. Companies use these for things like security rules."],
+  ["Required and locked", "Required: can't be turned off. Locked: groups closer to you can't replace it, even if you re-rank things. Used for things like security rules."],
 ];
-// Joining a company company_config: `lo init <url> --non-interactive`.
-function connectCompany() {
-  const url = el("input", { type: "text", class: "grow", placeholder: "https://git.example.com/acme/agent-config", "aria-label": "Company link" });
+// Connecting with any link someone shared: `lo init <url> --non-interactive`
+// subscribes to a source, or joins a company config.
+function connectLink() {
+  const url = el("input", { type: "text", class: "grow", placeholder: "https://git.example.com/acme/payments-skills", "aria-label": "Link" });
   const status = el("div", { style: "margin-top:12px" });
   const go = async () => {
     const u = url.value.trim(); if (!u) { url.focus(); return; }
-    status.replaceChildren(el("div", { class: "muted" }, "Connecting: finding your groups, setting up your AI tools and downloading skills. This can take a minute…"));
-    try { await run(["init", u, "--non-interactive"], "Connected to your company", false); closeDrawer(); show("Start"); }
-    catch (e) { status.replaceChildren(el("div", { class: "bad" }, e.message)); }
+    status.replaceChildren(el("div", { class: "muted" }, "Connecting: looking inside, setting up your AI tools and downloading skills. This can take a minute…"));
+    try {
+      const out = await run(["init", u, "--non-interactive"], "Connected", false);
+      toast(out.kind === "company_config" ? `Connected to ${out.company}'s company config` : `Connected to ${(out.sources[0] || {}).name || u}` + (out.sources.length > 1 ? ` and ${out.sources.length - 1} source(s) it builds on` : ""));
+      closeDrawer(); show("Start");
+    } catch (e) { status.replaceChildren(el("div", { class: "bad" }, e.message)); }
   };
-  openDrawer(el("h2", {}, "Connect to your company"),
-    el("p", { class: "muted" }, "Paste the link your company gave you for Loadout (its company_config: the list of groups and their skills). Loadout works out which groups you're in, sets up the AI tools it finds on this computer, and downloads your skills."),
+  openDrawer(el("h2", {}, "Connect with a link"),
+    el("p", { class: "muted" }, "Paste the link someone gave you: usually your team's source, or a company config if your company keeps one. Loadout looks inside, connects you (and to whatever it builds on), sets up the AI tools it finds on this computer, and downloads the skills."),
     el("form", { class: "row", onsubmit: e => { e.preventDefault(); go(); } }, url, el("button", { class: "btn primary", type: "submit" }, "Connect")),
     status,
-    el("p", { class: "faint", style: "margin-top:16px" }, "No link? Ask whoever looks after AI tools at your company, or add sources one at a time on the Sources page."));
+    el("p", { class: "faint", style: "margin-top:16px" }, "No link? Start your own source instead: it takes a minute, and you can connect it to others later."));
   url.focus();
+}
+
+// Creating a source for your team or yourself (`lo init --new-source … --subscribe`).
+async function startOwn() {
+  const who = await api("/api/whoami").catch(() => ({}));
+  const me = (who.name || "me").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "me";
+  const name = el("input", { type: "text", value: "team-skills", "aria-label": "Source name" });
+  const kind = el("select", { "aria-label": "Who it's for" },
+    el("option", { value: "team" }, "My team"), el("option", { value: "user" }, "Just me"), el("option", { value: "own" }, "A layer of our own (e.g. beta)"));
+  const group = el("input", { type: "text", placeholder: "payments-dev", "aria-label": "Group" });
+  const layer = el("input", { type: "text", placeholder: "beta", "aria-label": "Layer name" });
+  const rank = el("input", { type: "number", value: "25", "aria-label": "Rank" });
+  const teamRow = el("div", { style: "display:contents" }, el("label", {}, "Team (its group)"), group);
+  const ownRow = el("div", { style: "display:none" }, el("label", {}, "Layer name"), layer, el("label", {}, "Rank"), rank,
+    el("div", { class: "hint" }, "Higher wins. Built in: company 0, team 20, role 40, you 50."));
+  kind.onchange = () => {
+    teamRow.style.display = kind.value === "user" ? "none" : "contents";
+    ownRow.style.display = kind.value === "own" ? "contents" : "none";
+    if (kind.value === "user" && name.value === "team-skills") name.value = `${me}-skills`;
+  };
+  const status = el("div", { style: "margin-top:12px" });
+  const go = async () => {
+    const body = { name: name.value.trim(), layer: kind.value === "own" ? layer.value.trim() : kind.value };
+    if (kind.value !== "user" && group.value.trim()) body.group = group.value.trim();
+    if (kind.value === "own") body.rank = parseInt(rank.value, 10);
+    status.replaceChildren(el("div", { class: "muted" }, "Creating it, connecting you and setting up your AI tools…"));
+    try {
+      const out = await api("/api/start-own", body);
+      status.replaceChildren(el("div", { class: "card ok" },
+        el("p", {}, "Created ", el("b", {}, out.created.name), " in ", el("span", { class: "mono" }, out.created.dir), ", and connected you to it."),
+        el("p", { class: "muted" }, "Next: write a skill in it (Create & edit), push the folder to your Git host, and share its link. Your teammates connect with it, and you can make it build on other teams' sources later.")));
+      refreshStatus();
+    } catch (e) { status.replaceChildren(el("div", { class: "bad" }, e.message)); }
+  };
+  openDrawer(el("h2", {}, "Start your own source"),
+    el("p", { class: "muted" }, "A source is a folder of skills kept in Git. Start one for your team, or just for you. It's created in your home folder under loadout/, and you're connected to it straight away."),
+    el("form", { onsubmit: e => { e.preventDefault(); go(); } },
+      el("div", { class: "form-grid" },
+        el("label", {}, "Name"), name, el("div", { class: "hint" }, "Lowercase, with dashes, e.g. payments-skills."),
+        el("label", {}, "Who is it for?"), kind, teamRow, ownRow),
+      el("div", { class: "row", style: "margin-top:12px" }, el("button", { class: "btn primary", type: "submit" }, "Create it"))),
+    status);
+}
+
+// Where a source sits for you: `lo source set/unset <url> …`.
+async function placeSource(s) {
+  const lay = await api("/api/layers").catch(() => ({ layers: [] }));
+  const label = el("input", { type: "text", value: s.label || "", placeholder: s.name, "aria-label": "Label" });
+  const layer = el("select", { "aria-label": "Layer" }, el("option", { value: "" }, `its own (${s.layer})`),
+    lay.layers.map(l => el("option", { value: l.name, selected: l.name === s.placed_at }, `${l.name} (rank ${l.rank})`)));
+  const rank = el("input", { type: "number", value: s.rank ?? "", placeholder: "from its layer", "aria-label": "Rank" });
+  const priority = el("input", { type: "number", value: s.priority || 0, "aria-label": "Priority" });
+  const status = el("div", { style: "margin-top:12px" });
+  const save = async () => {
+    const set = [], unset = [];
+    const l = label.value.trim();
+    if (l && l !== (s.label || "")) set.push("--label", l); else if (!l && s.label) unset.push("--label");
+    if (layer.value && layer.value !== (s.placed_at || "")) set.push("--layer", layer.value); else if (!layer.value && s.placed_at) unset.push("--layer");
+    if (rank.value !== "" && Number(rank.value) !== s.rank) set.push("--rank", String(parseInt(rank.value, 10))); else if (rank.value === "" && s.rank != null) unset.push("--rank");
+    if (Number(priority.value || 0) !== (s.priority || 0)) set.push("--priority", String(parseInt(priority.value || "0", 10)));
+    if (!set.length && !unset.length) { closeDrawer(); return; }
+    try {
+      if (set.length) await run(["source", "set", s.url, ...set], `Placed ${l || s.name}`, false);
+      if (unset.length) await run(["source", "unset", s.url, ...unset], `Placed ${l || s.name}`, false);
+      closeDrawer(); show(current, undefined, true);
+    } catch (e) { status.replaceChildren(el("div", { class: "bad" }, e.message)); }
+  };
+  openDrawer(el("h2", {}, "Place ", el("code", {}, s.label || s.name)),
+    el("p", { class: "muted" }, "Only for you: give this source your own name, and choose where it ranks against your other sources. When two sources have something with the same name, the higher rank wins; priority settles ties at the same rank."),
+    s.placed_by && s.placed_by !== "your [[source]] in config.toml" ? el("p", { class: "faint" }, `Right now it's placed by ${s.placed_by}. Your settings here win.`) : null,
+    el("form", { onsubmit: e => { e.preventDefault(); save(); } },
+      el("div", { class: "form-grid" },
+        el("label", {}, "Label"), label, el("div", { class: "hint" }, "Shown instead of its name. Empty: its own name."),
+        el("label", {}, "Layer"), layer, el("div", { class: "hint" }, "Ranks everything in it at this layer, items that name their own layer too."),
+        el("label", {}, "Rank"), rank, el("div", { class: "hint" }, "An exact rank instead, e.g. 27. Empty: from its layer."),
+        el("label", {}, "Priority"), priority),
+      el("p", { class: "faint" }, "Locked items stay where their source put them, whatever you choose here."),
+      el("div", { class: "row" }, el("button", { class: "btn primary", type: "submit" }, "Save"), el("button", { class: "btn", type: "button", onclick: closeDrawer }, "Cancel"))),
+    status);
+}
+
+// A rank's origin in words (RankOrigin from `lo why` / `/api/layers`).
+function originText(o) {
+  if (!o) return "";
+  switch (o.from) {
+    case "default": return "the built-in defaults";
+    case "source": return `${o.source}'s LOADOUT.md`;
+    case "company_config": return "the company config";
+    case "config": return "your own ranks";
+    case "subscription": return o.upstream_of ? `${o.upstream_of}'s upstream entry` : "your placement of this source";
+    default: return o.from;
+  }
 }
 
 function glossary() {
@@ -395,12 +500,49 @@ async function why(key) {
     openDrawer(
       el("h2", {}, "Why do I have ", el("code", {}, key), "?"),
       el("p", {}, w.winner ? ["You get the version from ", el("code", {}, w.winner.split(":")[0]), w.enabled ? el("span", { class: "ok" }, " and it's on.") : el("span", { class: "muted" }, ", but it's off.")] : "None of your groups provide it."),
-      el("p", { class: "muted" }, "When several groups provide something with the same name, the one closest to you wins (higher rank), unless a group above has locked it."),
+      el("p", { class: "muted" }, "When several groups provide something with the same name, the one closest to you wins (higher rank), unless a group above has locked it. Locks compare the ranks their sources declared, so re-ranking can't get around them."),
       tbl(["Provided by", "Group", "Rank", "Result"], w.candidates.map(c => el("tr", {},
-        el("td", { class: "mono" }, c.id), el("td", {}, `${c.layer}:${c.group || "-"}`), el("td", {}, c.rank ?? "-"),
-        el("td", { class: "muted" }, c.outcome + (c.by ? ` (${c.by})` : "") + (c.locked ? " · locked" : ""))))),
+        el("td", { class: "mono" }, c.id, c.label ? el("div", { class: "faint" }, c.label) : null),
+        el("td", {}, `${c.layer}:${c.group || "-"}`, c.placed_at ? el("div", { class: "faint" }, "placed at " + c.placed_at) : null),
+        el("td", {}, c.rank ?? "-", c.rank_from ? el("div", { class: "faint" }, "from " + originText(c.rank_from)) : null),
+        el("td", { class: "muted" }, c.outcome + (c.by ? ` (${c.by})` : "") + (c.locked ? " · locked" : "") + (c.rerank_ignored ? ` · re-rank ignored (locks use rank ${c.lock_rank})` : ""))))),
       (w.targets || []).length ? el("div", { style: "margin-top:12px" }, el("h2", {}, "Installed in your AI tools"), (w.targets || []).map(t => el("div", { class: "mono muted" }, `${t.target}: ${t.path}${t.installed ? "" : " (not installed)"}`))) : null);
   } catch (e) { toast(e.message, true); }
+}
+
+// Your layers' Ranks card: drag a layer, or type its rank (`lo layers set`).
+function ranksCard(lay) {
+  const rows = lay.layers;
+  const list = el("ol", { class: "rank-list" });
+  const save = (name, r) => run(["layers", "set", `${name}=${r}`], `${name} is now rank ${r}`);
+  let dragged = null;
+  rows.forEach((l, i) => {
+    const input = el("input", { type: "number", value: l.rank, "aria-label": `Rank of ${l.name}`,
+      onchange: e => { const v = parseInt(e.target.value, 10); if (Number.isFinite(v) && v !== l.rank) save(l.name, v); } });
+    const li = el("li", { class: "rank-row", draggable: "true" },
+      el("span", { class: "handle", "aria-hidden": "true" }, "⠿"), el("b", {}, l.name === "user" ? "you (user)" : l.name), input,
+      el("span", { class: "faint grow" }, "from " + originText(l.from) + (l.declared_rank != null ? `; declared ${l.declared_rank}, where its locks stay` : "")),
+      l.from.from === "config" ? el("button", { class: "btn ghost", title: "Go back to the rank its sources declared", onclick: () => run(["layers", "unset", l.name], `${l.name} is back to its declared rank`) }, "Reset") : null);
+    li.ondragstart = e => { dragged = i; e.dataTransfer.effectAllowed = "move"; };
+    li.ondragover = e => { e.preventDefault(); li.classList.add("over"); };
+    li.ondragleave = () => li.classList.remove("over");
+    li.ondrop = e => {
+      e.preventDefault(); li.classList.remove("over");
+      if (dragged === null || dragged === i) return;
+      const moved = rows[dragged];
+      const rest = rows.filter((_, j) => j !== dragged);
+      const pos = rest.indexOf(rows[i]) + (dragged < i ? 1 : 0);
+      const prev = rest[pos - 1], next = rest[pos];
+      const r = !prev ? next.rank - 10 : !next ? prev.rank + 10 : next.rank - prev.rank >= 2 ? Math.floor((prev.rank + next.rank) / 2) : null;
+      if (r === null) { toast(`No whole rank between ${prev.name} (${prev.rank}) and ${next.name} (${next.rank}). Type one instead.`, true); return; }
+      save(moved.name, r);
+    };
+    list.append(li);
+  });
+  return el("details", { class: "card", open: pref.get("ranks") === "open" || null, ontoggle: e => pref.set("ranks", e.target.open ? "open" : "closed") },
+    el("summary", {}, el("b", {}, "Ranks"), el("span", { class: "muted" }, " · which layer wins, broadest first")),
+    el("p", { class: "muted" }, "Drag a layer up or down, or type its rank: higher ranks are closer to you and win. This only changes things for you, and locked items stay where their sources put them."),
+    list, (lay.warnings || []).map(w => el("div", { class: "warn" }, w)));
 }
 
 // The button that changes an item's state (Browse skills and Your layers).
@@ -428,16 +570,16 @@ const views = {
     const tools = (tg.targets || []).filter(t => t.enabled).map(t => t.display);
     m.append(pageHead("Start", "A two-minute tour, and a checklist to get you set up"));
     m.append(el("div", { class: "card" },
-      el("p", { class: "lede" }, "Loadout gives the AI assistants you use (Claude Code, Cursor, Codex and others) the know-how your company and team have written down, and keeps it up to date."),
+      el("p", { class: "lede" }, "Loadout gives the AI assistants you use (Claude Code, Cursor, Codex and others) the know-how your team, and the teams around it, have written down, and keeps it up to date."),
       el("p", { class: "muted", style: "margin-top:0" }, "You can do everything from these pages. No command line needed."),
       el("div", { class: "steps3", style: "margin-top:14px" },
-        el("div", { class: "step3" }, el("span", { class: "num" }, "1"), el("b", {}, "Groups share skills"), el("span", { class: "muted" }, "The company, your team, your role: each keeps its instructions for AI assistants in a shared folder (a source).")),
-        el("div", { class: "step3" }, el("span", { class: "num" }, "2"), el("b", {}, "You get your groups' skills"), el("span", { class: "muted" }, "Loadout picks the sources for the groups you're in. If two have the same skill, the one closest to you wins.")),
+        el("div", { class: "step3" }, el("span", { class: "num" }, "1"), el("b", {}, "Teams share skills"), el("span", { class: "muted" }, "Your team, the teams around it, you: each keeps its instructions for AI assistants in a shared folder (a source).")),
+        el("div", { class: "step3" }, el("span", { class: "num" }, "2"), el("b", {}, "You connect to sources"), el("span", { class: "muted" }, "Connect to your team's source and you also get the ones it builds on. If two have the same skill, the one closest to you wins.")),
         el("div", { class: "step3" }, el("span", { class: "num" }, "3"), el("b", {}, "Your AI tools use them"), el("span", { class: "muted" }, "One click on Update now installs everything into each AI app on this computer.")))));
     const steps = [
-      { done: sources > 0, t: "Connect to your team's skills", d: sources ? `${sources} source(s) connected.` : "If your company uses Loadout, it has probably sent you a link: connect with it and you're set up for your groups. Or add a single source by its address.",
+      { done: sources > 0, t: "Connect to your team's skills", d: sources ? `${sources} source(s) connected.` : "Got a link from a teammate? Paste it: you get that source and everything it builds on. No link yet? Start your own source, for your team or just for you.",
         act: sources ? el("button", { class: "btn", onclick: () => show("Sources") }, "See sources")
-          : el("div", { class: "row" }, el("button", { class: "btn primary", onclick: connectCompany }, "I have my company's link"), el("button", { class: "btn", onclick: () => show("Sources") }, "Add a source"), el("button", { class: "btn", title: "Someone gave you a code (lo1_…) with their setup", onclick: () => show("Share") }, "I have a share code")) },
+          : el("div", { class: "row" }, el("button", { class: "btn primary", onclick: connectLink }, "Paste a link"), el("button", { class: "btn", onclick: startOwn }, "Start your own"), el("button", { class: "btn", title: "Someone gave you a code (lo1_…) with their setup", onclick: () => show("Share") }, "I have a share code")) },
       { done: tools.length > 0, t: "Choose your AI tools", d: tools.length ? "Set up: " + tools.join(", ") + "." : "Tell Loadout which AI apps you use on this computer.",
         act: el("button", { class: "btn", onclick: () => show("Targets") }, "Pick AI tools") },
       { done: sources > 0 && !!st.last_sync, t: "Get the latest skills", d: st.last_sync ? `Last updated ${ago(st.last_sync)}. Update again any time; it's safe.` : "Download everything from your sources and install it into your AI tools.",
@@ -561,7 +703,7 @@ const views = {
 
   async Layers(m) {
     const state = views.Layers.state || (views.Layers.state = { all: false, kind: "", mine: false });
-    m.append(pageHead("Layers", "Which group each skill comes from, from the whole company down to you", syncBtn()));
+    m.append(pageHead("Layers", "Which group each skill comes from, from the broadest down to you", syncBtn()));
     const [out, prof, lay, srcs] = await Promise.all([
       api("/api/search?q=" + (state.all ? "&all=1" : "")),
       api("/api/profile").catch(() => null),
@@ -569,6 +711,7 @@ const views = {
       api("/api/sources").catch(() => ({ sources: [] })),
     ]);
     const synced = new Set(srcs.sources.map(s => s.name));
+    const labels = new Map(srcs.sources.filter(s => s.label).map(s => [s.name, s.label]));
     const hits = out.hits.filter(h => (!state.kind || h.kind === state.kind) && (!state.mine || h.state === "enabled"));
     const res = lay.resolution || {};
     const byKey = new Map();
@@ -595,6 +738,7 @@ const views = {
     if (chain.length) m.append(el("div", { class: "card" }, el("h2", {}, "Your chain"),
       el("div", { class: "chain" }, [...chain, "you"].map((c, i) => [i ? el("span", { class: "faint" }, "→") : null, el("span", { class: "chip" + (i === chain.length ? " role" : "") }, c)])),
       el("div", { class: "muted", style: "margin-top:6px" }, "From the broadest group to you. When two have the same thing, the one further right wins, unless a group to the left has locked it.")));
+    m.append(ranksCard(lay));
     const kinds = [...new Set(out.hits.map(h => h.kind))].sort();
     const kindSel = el("select", { "aria-label": "Type", onchange: e => { state.kind = e.target.value; show("Layers"); } },
       el("option", { value: "" }, "All types"), kinds.map(k => el("option", { value: k, selected: k === state.kind }, kindLabel(k))));
@@ -618,7 +762,7 @@ const views = {
       for (const h of inLayer) { const g = h.group || ""; if (!byGroup.has(g)) byGroup.set(g, []); byGroup.get(g).push(h); }
       const card = el("div", { class: "card" },
         el("div", { class: "layer-head" }, el("h2", {}, layer === "user" ? "You" : layer),
-          el("span", { class: "faint" }, rank.has(layer) ? `rank ${rank.get(layer)}` : "not in the company config's layers"),
+          el("span", { class: "faint" }, rank.has(layer) ? `rank ${rank.get(layer)}` : "no rank yet: give it one in Ranks above"),
           el("span", { class: "grow" }), el("span", { class: "muted" }, `${inLayer.filter(h => h.state === "enabled").length} on · ${inLayer.length} total`)));
       for (const [group, items] of byGroup) {
         const member = group ? memberOf(layer, group) : true;
@@ -627,7 +771,7 @@ const views = {
           el("div", { class: "group-head" },
             el("span", { class: "n" }, group || (layer === "user" ? "Your own source" : "Everyone in this layer")),
             group ? el("span", { class: member ? "pill enabled" : "pill not-subscribed" }, member ? "you're in this group" : "not your group") : null,
-            srcs.map(s => el("span", { class: "chip", title: "Source" }, s))),
+            srcs.map(s => el("span", { class: "chip", title: "Source " + s }, labels.get(s) || s))),
           items.length ? items.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)).map(h => {
             const r = res[`${h.kind}/${h.name}`];
             return el("div", { class: "litem " + (h.state === "enabled" ? "win" : h.state === "shadowed" ? "lose" : "") },
@@ -656,18 +800,21 @@ const views = {
     for (const s of out.sources) if (up(s)) { if (!kids.has(up(s))) kids.set(up(s), []); kids.get(up(s)).push(s); }
     const node = s => el("li", {},
       el("div", { class: "node" },
-        el("span", { class: "n" }, s.name),
+        el("span", { class: "n" }, s.label || s.name), s.label ? el("span", { class: "faint mono" }, s.name) : null,
+        s.rank != null || s.placed_at ? el("span", { class: "badge", title: `Placed by ${s.placed_by || "you"}` }, s.rank != null ? `rank ${s.rank}` : `at ${s.placed_at}`) : null,
+        s.priority ? el("span", { class: "badge", title: "Wins ties with sources at the same rank when higher" }, `priority ${s.priority}`) : null,
         s.parent ? el("span", { class: "badge", title: `A folder of ${s.parent}'s repo with its own LOADOUT.md; you get its skills if you're in its group` }, "in " + s.path + "/") : s.via ? el("span", { class: "badge upstream", title: `${s.via} builds on this source, so you get it too` }, "included by " + s.via) : s.manual ? el("span", { class: "badge", title: "You added this source yourself" }, "added by you") : el("span", { class: "badge", title: "Added because you're in one of your company's groups" }, "from your company"),
         el("span", { class: "mono faint" }, short(s.commit)),
         el("span", { class: "grow" }),
         el("button", { class: "btn ghost", onclick: () => { current = "Catalog"; (views.Catalog.state = { q: "", all: false, sel: { source: new Set([s.name]) } }); show("Catalog"); } }, "See its skills"),
         el("button", { class: "btn ghost", onclick: () => show("Edit", { source: s.name }) }, "Edit"),
+        s.parent ? null : el("button", { class: "btn ghost", title: "Your own name for it, and where it ranks for you", onclick: () => placeSource(s) }, "Place…"),
         s.manual && !s.via && !s.parent ? el("button", { class: "btn", onclick: () => confirm(`Remove ${s.name}? Its skills will be taken out of your AI tools.`) && run(["unsubscribe", s.url], "Removed " + s.name).then(() => run(["sync"], "Updated")) }, "Remove") : null),
       s.parent ? null : el("div", { class: "mono faint", style: "margin:-6px 0 6px;overflow-wrap:anywhere;font-size:11.5px" }, s.url),
       kids.has(s.name) ? el("ul", { class: "tree" }, kids.get(s.name).map(node)) : null);
     const roots = out.sources.filter(s => !up(s));
     m.append(el("div", { class: "card" },
-      out.company_config ? el("div", { class: "muted", style: "margin-bottom:6px" }, "Your company's list of groups (company config): ", el("span", { class: "mono" }, out.company_config)) : null,
+      out.company_config ? el("div", { class: "muted", style: "margin-bottom:6px" }, "Company config (list of groups): ", el("span", { class: "mono" }, out.company_config)) : null,
       roots.length ? el("ul", { class: "tree" }, roots.map(node)) : el("div", { class: "empty" }, "No sources yet. Add one below: paste the address someone gave you.")));
 
     const url = el("input", { type: "text", class: "grow", placeholder: "https://git.example.com/acme/team-skills (or the path to a local Git repo)", "aria-label": "Source URL" });
@@ -693,10 +840,10 @@ const views = {
           (p.warnings || []).map(w => el("div", { class: "warn" }, w))].flat(Infinity));
       } catch (e) { preview.replaceChildren(el("div", { class: "bad", style: "margin-top:10px" }, e.message)); }
     };
-    if (!out.company_config) m.append(el("div", { class: "card row" }, el("span", { class: "grow" }, el("b", {}, "Got a link from your company? "), el("span", { class: "muted" }, "Connect once and you get the sources for all your groups.")),
-      el("button", { class: "btn", onclick: connectCompany }, "Connect to your company")));
+    m.append(el("div", { class: "card row" }, el("span", { class: "grow" }, el("b", {}, "Starting something new? "), el("span", { class: "muted" }, "Create a source for your team, or just for you, and share its link.")),
+      el("button", { class: "btn", onclick: startOwn }, "Start your own")));
     m.append(el("div", { class: "card" }, el("h2", {}, "Add a source"),
-      el("div", { class: "muted", style: "margin-bottom:8px" }, "Paste a source's address (from your team, or a Git link) and click Look inside to see what you'd get. Nothing changes until you click Add."),
+      el("div", { class: "muted", style: "margin-bottom:8px" }, "Paste a source's address (from your team, or a Git link) and click Look inside to see what you'd get, including the sources it builds on. Nothing changes until you click Add. A company config link works too: use Paste a link on Start here."),
       el("form", { class: "row", onsubmit: e => { e.preventDefault(); doPreview(); } }, url, el("button", { class: "btn", type: "submit" }, "Look inside")), preview));
   },
 
@@ -782,7 +929,7 @@ const views = {
             li("Turned on/off", onOff), li("AI tools", s.targets),
             el("li", {}, el("b", {}, "Versions: "), Object.keys(s.pins || {}).length ? "exactly the ones in the code" : "the latest of everything")),
           s.missing_commits.length ? el("p", { class: "muted" }, `Needs to download ${s.missing_commits.length} version(s) this computer doesn't have yet.`) : null,
-          el("p", { class: "warn" }, "This replaces your current groups, extra sources, on/off choices and AI tools."),
+          el("p", { class: "warn" }, "This replaces your current groups, extra sources, on/off choices, layer ranks and AI tools."),
           el("div", { class: "row" },
             el("button", { class: "btn primary", onclick: async (e) => {
               e.target.disabled = true;

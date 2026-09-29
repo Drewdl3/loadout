@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use loadout_cli::commands::{
-    adopt, audit, doctor, export_source, info, init, list, new_source, profile, project, review,
-    schedule, search, secrets, share, subscribe, targets, template, why,
+    adopt, audit, doctor, export_source, info, init, layers, list, new_source, profile, project,
+    review, schedule, search, secrets, share, source, subscribe, targets, template, why,
 };
 use loadout_cli::ctx::ErrorReport;
 use loadout_cli::engine::ApplyReport;
@@ -46,6 +46,12 @@ fn cli_schemas_are_up_to_date() {
         check::<ApplyReport>(apply, &mut stale);
     }
     check::<why::WhyReport>("why", &mut stale);
+    for l in ["layers", "layers-set", "layers-unset"] {
+        check::<layers::LayersReport>(l, &mut stale);
+    }
+    for change in ["source-set", "source-unset"] {
+        check::<source::SourceSetReport>(change, &mut stale);
+    }
     check::<init::InitReport>("init", &mut stale);
     check::<init::InitCreateReport>("init-new-source", &mut stale);
     check::<subscribe::SubscribePreview>("subscribe-preview", &mut stale);

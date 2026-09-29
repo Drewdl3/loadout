@@ -8,7 +8,7 @@ directory here is what one Git repo would contain; all URLs use
 |---|---|---|
 | [`acme-config`](acme-config/LOADOUT.md) | `company:acme` | The **company config**: layers and ranks, every group with its repo and membership rule, policy, secret chain. Also company-wide items: a `required` + `locked` skill and a Jira MCP server whose token is `secret://jira/token`. |
 | [`eng-skills`](eng-skills/LOADOUT.md) | `org:eng` | Org-wide skills, `default-on` from `LOADOUT.md` `defaults:`; one `default-off` skill; a subagent (`agents/code-reviewer.md`). |
-| [`payments-skills`](payments-skills/LOADOUT.md) | `team:payments-dev` | A team **override** of Engineering's `write-spec`; a skill limited with `applies_to: { role: [developer] }`; an HTTP MCP server with an `env://` header; a slash command (`extras/commands/reconcile.md`). |
+| [`payments-skills`](payments-skills/LOADOUT.md) | `team:payments-dev` | Builds on Engineering's source (`upstream: [../eng-skills]`), so its link alone gets you both. A team **override** of Engineering's `write-spec`; a skill limited with `applies_to: { role: [developer] }`; an HTTP MCP server with an `env://` header; a slash command (`extras/commands/reconcile.md`). |
 | [`billing-config`](billing-config/LOADOUT.md) | `product:billing` | An opt-in product group (`membership: { manual: true }`). |
 | [`pm-presets`](pm-presets/LOADOUT.md) | `role:product-manager` | A role that cuts across teams. |
 
@@ -24,10 +24,12 @@ and `eng-skills` publishes a `pr-workflow` **template** that squads adapt.
 `./examples/onboard.sh` (with `LOADOUT=…` as below) plays out
 [`docs/onboarding.md`](../docs/onboarding.md):
 
-- a squad lead creates the Checkout squad's source on top of Payments, fills
-  in the PR template, and registers the squad in the company config;
-- a new developer joins and adds a personal layer;
-- the squad pushes an update, which the developer reviews and approves.
+- a squad lead connects to the Payments team's source, creates the Checkout
+  squad's source on top of it, and fills in the PR template;
+- a new developer connects with the squad's link and adds a personal layer;
+- the squad pushes an update, which the developer reviews and approves;
+- later, the company config lists the squad, and the developer connects to
+  it on top of everything else.
 
 ## Try it
 
@@ -55,8 +57,8 @@ touched. You should see:
 skill/write-spec — enabled (default)
 winner: payments-skills:skill/write-spec (most specific layer)
 candidates:
-  ✓ payments-skills:skill/write-spec  team:payments-dev (rank 20, priority 0) — winner
-  ✗ eng-skills:skill/write-spec       org:eng (rank 10, priority 0) — outranked by payments-skills:skill/write-spec
+  ✓ payments-skills:skill/write-spec  team:payments-dev (rank 20 from the company config, priority 0) — winner
+  ✗ eng-skills:skill/write-spec       org:eng (rank 10 from the company config, priority 0) — outranked by payments-skills:skill/write-spec
 targets:
   claude-code: ~/.claude/skills/write-spec (link)
 ```

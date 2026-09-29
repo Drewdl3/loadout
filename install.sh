@@ -1,12 +1,12 @@
 #!/bin/sh
 # Install Loadout's `lo` from a GitHub release, verified against the
-# release's SHA256SUMS, then (optionally) run `lo init` with your
-# company config so you pick your groups and AI tools.
+# release's SHA256SUMS, then (optionally) run `lo init` with a link
+# someone shared (your team's source, or a company config).
 #
 #   curl -fsSL https://raw.githubusercontent.com/Drewdl3/loadout/main/install.sh | sh
-#   curl -fsSL …/install.sh | sh -s -- --company-config https://git.example.com/acme/agent-config
+#   curl -fsSL …/install.sh | sh -s -- --connect https://git.example.com/acme/payments-skills
 #
-# Options: --company-config <url>  run `lo init <url>` afterwards
+# Options: --connect <url> run `lo init <url>` afterwards (alias: --company-config)
 #          --version <tag>  install this release (default: latest)
 #          --dir <dir>      install directory (default: ~/.local/bin)
 # Environment: LOADOUT_RELEASES_API (default https://api.github.com/repos/Drewdl3/loadout),
@@ -19,7 +19,7 @@ version=""
 company_config=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --company-config) company_config="$2"; shift 2 ;;
+    --connect|--company-config) company_config="$2"; shift 2 ;;
     --version) version="$2"; shift 2 ;;
     --dir) dir="$2"; shift 2 ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
@@ -74,9 +74,9 @@ echo "Installed $("$dir/lo" --version) to $dir/lo"
 case ":$PATH:" in *":$dir:"*) ;; *) echo "Add $dir to your PATH (e.g. in ~/.profile): export PATH=\"$dir:\$PATH\"" ;; esac
 
 if [ -n "$company_config" ]; then
-  # Interactive when a terminal is available: pick groups and detected tools.
+  # Interactive when a terminal is available: confirm, pick groups and tools.
   if [ -t 1 ] && [ -r /dev/tty ]; then "$dir/lo" init "$company_config" < /dev/tty
   else "$dir/lo" init "$company_config" --non-interactive; fi
 else
-  echo "Next: lo init <your company config URL>"
+  echo "Next: lo init <a link someone shared>, or lo init to start your own (lo ui for the web UI)"
 fi

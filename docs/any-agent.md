@@ -88,8 +88,9 @@ The [`loadout` skill](../shims/claude-code/skills/loadout/SKILL.md) tells an age
 how to answer "where does this skill come from?", "turn X off", "what's
 pending?" and so on with `lo … --json --exit-zero`. It's an ordinary
 skill, so the simplest way to give it to every tool is to **distribute it
-through your company config**. Copy it to `skills/loadout/SKILL.md` in the company config
-repo, and every person gets it in every tool they use.
+through a source everyone has**: your team's source (or, if you have one,
+your company config). Copy it to `skills/loadout/SKILL.md` in that repo,
+and every subscriber gets it in every tool they use.
 
 The [`loadout-authoring` skill](../shims/claude-code/skills/loadout-authoring/SKILL.md)
 teaches an agent to write sources: item formats, templates, company configs, and

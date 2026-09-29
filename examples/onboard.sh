@@ -4,12 +4,14 @@
 #
 #   cargo build && LOADOUT=$PWD/target/debug/lo ./examples/onboard.sh
 #
-# 1. Sam (Checkout squad lead) creates the squad's catalog on top of the
-#    Payments team's, turns Engineering's PR template into the squad's own
-#    skill, and registers the squad in the Acme company config.
-# 2. Alex (a new developer) runs `lo init`, joins the squad, and adds a
+# 1. Sam (Checkout squad lead) connects to the Payments team's source,
+#    builds the squad's on top of it, and turns Engineering's PR template
+#    into the squad's own skill.
+# 2. Alex (a new developer) connects with the squad's link and adds a
 #    personal layer.
 # 3. Sam updates the squad's skill; Alex reviews and approves it.
+# 4. Later, Acme adds a company config listing the squad; Alex connects to
+#    it and keeps everything above.
 #
 # Needs `git`. Local repos stand in for your Git host; each "commit" below
 # would be a push and a reviewed pull request in real life.
@@ -47,9 +49,9 @@ as() {
   mkdir -p "$LOADOUT_HOME/.claude"
 }
 
-step "Sam, the Checkout squad lead, is already set up as a Payments developer"
+step "Sam, the Checkout squad lead, connects to the Payments team's source"
 as sam
-run init "$remotes/acme-config" --non-interactive --quiet
+run init "$remotes/payments-skills" --non-interactive --quiet   # and its upstream, eng-skills
 run template list
 
 step "Sam creates the squad's catalog, building on the Payments team's"
@@ -61,21 +63,9 @@ rm -r "$remotes/checkout-squad/skills/example"   # the scaffold's placeholder
 commit "$remotes/checkout-squad" "Add our PR workflow from the Engineering template"
 run audit --path "$remotes/checkout-squad"
 
-step "Sam registers the squad in the company config (a reviewed PR to the company config repo)"
-awk -v src="$remotes/checkout-squad" '
-  /^  policy:/ && !done {
-    print "    - layer: squad"; print "      name: checkout"
-    print "      sources: [\"" src "\"]"; print "      membership: { manual: true }"
-    done = 1
-  }
-  { print }' "$remotes/acme-config/LOADOUT.md" > "$sandbox/LOADOUT.md"
-mv "$sandbox/LOADOUT.md" "$remotes/acme-config/LOADOUT.md"
-commit "$remotes/acme-config" "Register the Checkout squad"
-
-step "Alex joins Acme: one command discovers org, team and role"
+step "Alex joins the squad: one link brings the squad, Payments and Engineering"
 as alex
-run init "$remotes/acme-config" --non-interactive
-run join squad:checkout       # joining installs the squad's items right away
+run init "$remotes/checkout-squad" --non-interactive
 run list
 run why skill/checkout-prs
 
@@ -96,6 +86,19 @@ commit "$remotes/checkout-squad" "Two approvals from now on"
 run sync || true   # exits 2: changes wait for review
 run diff checkout-squad || true
 run approve checkout-squad
+
+step "Later: Acme adds a company config that lists the squad"
+awk -v src="$remotes/checkout-squad" '
+  /^  policy:/ && !done {
+    print "    - layer: squad"; print "      name: checkout"
+    print "      sources: [\"" src "\"]"; print "      membership: { manual: true }"
+    done = 1
+  }
+  { print }' "$remotes/acme-config/LOADOUT.md" > "$sandbox/LOADOUT.md"
+mv "$sandbox/LOADOUT.md" "$remotes/acme-config/LOADOUT.md"
+commit "$remotes/acme-config" "List the Checkout squad"
+run init "$remotes/acme-config" --non-interactive   # groups from ACME_* env vars
+run why skill/code-review-standards                 # the company's locked standard
 
 step "Done"
 echo "Sandbox: $sandbox"

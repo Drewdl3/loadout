@@ -37,6 +37,13 @@
         "source": {
           "type": "string"
         },
+        "source_label": {
+          "description": "The source's display name from its subscription (`label`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",

@@ -16,15 +16,22 @@ use crate::exit;
 pub struct SubscribeArgs {
     /// Git URL of the source repo, or the path to a local Git repo.
     pub url: String,
-    /// Layer to assign to the source's items when `LOADOUT.md` doesn't.
+    /// Rank all of the source's items at this layer, items that set their
+    /// own `layer:` included.
     #[arg(long)]
     pub layer: Option<String>,
     /// Group to assign to the source's items when `LOADOUT.md` doesn't.
     #[arg(long)]
     pub group: Option<String>,
+    /// Rank all of the source's items at exactly this rank (higher wins).
+    #[arg(long, allow_negative_numbers = true)]
+    pub rank: Option<i64>,
     /// Tie-breaker among equal-rank sources; higher wins.
     #[arg(long, default_value_t = 0, allow_negative_numbers = true)]
     pub priority: i64,
+    /// Display name for the source (in `lo why`, `lo list` and the web UI).
+    #[arg(long)]
+    pub label: Option<String>,
     /// Branch, tag or commit to track instead of the default branch.
     #[arg(long = "ref")]
     pub git_ref: Option<String>,
@@ -221,8 +228,10 @@ pub fn add_subscription(ctx: &Ctx, args: SubscribeArgs) -> Result<(String, bool)
     };
     let changed = doc.add_source(&SourceSub {
         url: url.clone(),
+        label: args.label,
         layer,
         group,
+        rank: args.rank,
         priority: args.priority,
         git_ref: args.git_ref,
     });

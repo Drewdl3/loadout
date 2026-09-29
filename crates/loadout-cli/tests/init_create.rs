@@ -38,7 +38,7 @@ fn init_without_arguments_explains_the_choices() {
     let out = s.run(&["init"]);
     assert_eq!(out.code, 1);
     for hint in [
-        "<company-config-url>",
+        "`lo init <url>`",
         "--new-source",
         "--new-company",
         "--project",

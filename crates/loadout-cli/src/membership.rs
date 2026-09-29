@@ -28,6 +28,25 @@ pub struct LoadedCompanyConfig {
     pub warning: Option<String>,
 }
 
+impl LoadedCompanyConfig {
+    /// Whether `url` is the company config itself or a source it lists.
+    pub fn lists_or_is(&self, url: &str) -> bool {
+        self.company_config.lists_source(url) || normalize_url(url) == normalize_url(&self.url)
+    }
+}
+
+/// The company config from its local checkout, if `config.toml` names one:
+/// `None` in a project layer (which has its own sources only), or when
+/// there's no usable checkout yet (checks that need it then don't apply;
+/// `lo sync` enforces its policy).
+pub fn current_company_config(ctx: &Ctx, config: &Config) -> Option<LoadedCompanyConfig> {
+    let url = config.company_config.as_ref()?;
+    if ctx.paths.project.is_some() {
+        return None;
+    }
+    load_company_config(ctx, &Git::new(), url, false).ok()
+}
+
 /// Fetches (or, with `fetch == false`, reuses) the company config checkout and
 /// parses its `company:` block.
 pub fn load_company_config(

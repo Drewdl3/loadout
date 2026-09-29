@@ -1,7 +1,10 @@
 # Getting started
 
-This page gets your AI tools set up with your company's and team's skills.
-It takes about five minutes. You don't need to know Git.
+This page gets your AI tools set up with your team's skills. It takes about
+five minutes. You don't need to know Git.
+
+Start with your team's source (or your own), and connect to the ones above
+it when you need them. Often your team's source already does that for you.
 
 ## 1. Install `lo`
 
@@ -28,7 +31,7 @@ cargo install --git https://github.com/Drewdl3/loadout loadout-cli
 ```
 
 You also need `git`. Loadout uses the Git logins you already have, so if
-you can clone your company's repos, Loadout can too.
+you can clone your team's repos, Loadout can too.
 
 Check it worked:
 
@@ -38,48 +41,58 @@ lo --version
 
 Later, `lo self-update` updates to the newest release.
 
-## 2. Connect
+## 2. Connect to your team's skills
 
-You have two options. Pick whichever you like; they do the same thing.
+### Got a link?
 
-### Option A: the web UI (no terminal after this)
+Someone on your team gave you a link to their source, a Git repo like
+`https://git.example.com/acme/payments-skills`. That's all you need.
+
+**In the web UI** (no terminal after this):
 
 ```sh
 lo ui
 ```
 
-Your browser opens on **Start here**. Click **I have my company's link**,
-paste the link your company gave you (it looks like
-`https://git.example.com/acme/agent-config`), and click **Connect**.
-Loadout then:
+Your browser opens on **Start here**. Click **Paste a link**, paste it, and
+click **Connect**. **In the terminal:**
 
-- works out which groups you're in (your org, your team, your role),
+```sh
+lo init https://git.example.com/acme/payments-skills
+```
+
+Either way, Loadout:
+
+- looks inside and shows you what you'd get, including the sources it
+  builds on (its *upstreams*, such as your org's),
+- subscribes you to it, which puts you in its group,
 - finds the AI tools installed on this computer,
-- downloads your groups' skills and installs them.
+- downloads the skills and installs them.
 
-The checklist on the page ticks itself off as you go. See
-[Using the web UI](Using-the-Web-UI.md) for a tour of every page.
+The same works if the link is to a *company config* (a list of groups
+some companies keep): Loadout then works out which groups you're in and
+sets you up for all of them. See
+[Growing across your org](Growing-Across-Your-Org.md).
 
-### Option B: the terminal
+To add more sources later, use **Sources** in the web UI (paste the address
+under **Add a source**, and preview it first) or `lo subscribe <link>`.
+
+### No link yet? Start your own
+
+Start a source for your team, or just for yourself. It takes a minute, and
+you can connect it to other teams' sources later.
+
+**In the web UI**, click **Start your own** on **Start here**. **In the
+terminal**, run `lo init` with no arguments and pick an option, or:
 
 ```sh
-lo init https://git.example.com/acme/agent-config
+lo init --new-source ~/loadout/payments-skills --layer team --group payments-dev --subscribe
+lo init --new-source ~/loadout/my-skills --layer user --subscribe    # just for you
 ```
 
-It asks which AI tools to set up, then does the same as above.
-
-### No company link?
-
-Your company might not use a *company config* (the list of groups). You can still add
-a team's source directly:
-
-```sh
-lo subscribe https://git.example.com/acme/payments-skills
-lo sync
-```
-
-In the web UI, go to **Sources** and paste the address under **Add a source**.
-You can preview what's in it first.
+Push the folder to your Git host and share its link; your teammates connect
+with `lo init <link>`. [Sharing skills](Sharing-Skills.md) covers writing
+the skills themselves.
 
 ## 3. Check what you got
 
@@ -89,7 +102,7 @@ lo profile                 # the groups you're in, and how that was decided
 ```
 
 Or open **Your layers** in the web UI to see every skill arranged by the group
-it comes from, from the whole company down to you. See
+it comes from, from the broadest down to you. See
 [How layers work](How-Layers-Work.md).
 
 Now open your AI tool (for example Claude Code) and the skills are there.
@@ -109,12 +122,13 @@ changes before they reach your tools; those show up under **Updates**. See
 
 - Turn skills on or off: **Browse skills** in the web UI, or
   `lo enable <id>` / `lo disable <id>`.
-- Join an optional group: `lo join product:billing`, or **Join** on the
-  **Home** page.
+- Get another team's skills: `lo subscribe <link>`, or **Sources** in the
+  web UI. Choose where they rank for you with `lo source set <name> --rank N`.
 - Share a skill of your own: [Sharing skills](Sharing-Skills.md).
 
 ## Try it without touching your setup
 
 The repo's [`examples/`](../../examples/README.md) folder has a complete
-fictional company (Acme). `examples/try.sh` runs it in a throwaway sandbox,
+fictional company (Acme), with team sources connected through `upstream:`
+and a company config on top. `examples/try.sh` runs it in a throwaway sandbox,
 so nothing touches your real home directory or AI tools.

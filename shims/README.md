@@ -11,4 +11,4 @@ Thin integrations; all logic stays in `lo`.
 Other tools, including IBM Bob (a built-in target), need no shim. See
 [`docs/any-agent.md`](../docs/any-agent.md) for session-start hooks, your
 own target files for any tool, and distributing the `loadout` skill through
-your company config.
+your team's source (or company config).

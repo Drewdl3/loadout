@@ -4,6 +4,6 @@ expression: out.stdout
 ---
 skill/pm-helper — not available to you
 candidates:
-  ✗ acme-company:skill/pm-helper  company:acme (rank 0, priority 0) — applies_to does not match your role
+  ✗ acme-company:skill/pm-helper  company:acme (rank 0 from the built-in defaults, priority 0) — applies_to does not match your role
 targets:
   claude-code: not installed

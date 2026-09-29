@@ -681,6 +681,107 @@ fn layers_lists_layers_in_rank_order_with_each_winner() {
     );
 }
 
+#[test]
+fn rank_layers_and_place_sources_from_the_ui() {
+    let (s, _app) = world();
+    let ui = Ui::start(&s, "http://127.0.0.1:9");
+    // Put `org` below `team`: rank and origin show up on the Layers page.
+    let out = ui.run(&["layers", "set", "org=25"]);
+    assert_eq!(
+        out["code"], 4,
+        "the world's write-spec conflict remains: {out}"
+    );
+    assert_eq!(out["output"]["changed"], true);
+    let (_, v) = ui.get("/api/layers");
+    let org = v["output"]["layers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["name"] == "org")
+        .unwrap()
+        .clone();
+    assert_eq!(org["rank"], 25);
+    assert_eq!(org["from"]["from"], "config");
+    assert_eq!(org["declared_rank"], 10);
+    assert_eq!(org["origin"], "your config.toml [layers]");
+
+    // Label a source and settle the equal-rank conflict with a rank.
+    let out = ui.run(&[
+        "source",
+        "set",
+        "other-skills",
+        "--label",
+        "Other team",
+        "--rank",
+        "21",
+    ]);
+    assert_eq!(out["code"], 0, "{out}");
+    assert_eq!(
+        installed(&s, "write-spec")
+            .as_deref()
+            .map(|t| t.contains("Other version")),
+        Some(true)
+    );
+    let (_, v) = ui.get("/api/sources");
+    let other = v["output"]["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "other-skills")
+        .unwrap()
+        .clone();
+    assert_eq!(other["label"], "Other team");
+    assert_eq!(other["rank"], 21);
+    let out = ui.run(&["source", "unset", "other-skills", "--rank"]);
+    assert_eq!(out["code"], 4, "the conflict is back: {out}");
+
+    // Anything else stays off limits.
+    let (status, _) = ui.post(
+        "/api/run",
+        json!({ "args": ["source", "set", "x", "--rank", "1", "--json"] }),
+    );
+    assert_eq!(status, 403);
+}
+
+#[test]
+fn start_your_own_source_from_the_ui() {
+    let s = Sandbox::with_claude();
+    std::fs::write(
+        s.scratch.join("gitconfig"),
+        "[user]\n\tname = Ada Lovelace\n\temail = ada@example.com\n",
+    )
+    .unwrap();
+    let ui = Ui::start(&s, "http://127.0.0.1:9");
+    let (status, v) = ui.post(
+        "/api/start-own",
+        json!({ "name": "beta-skills", "layer": "beta", "rank": 27 }),
+    );
+    assert_eq!(status, 200, "{v}");
+    assert_eq!(v["code"], 0, "{v}");
+    let dir = s.home.join("loadout").join("beta-skills");
+    assert_eq!(
+        v["output"]["created"]["dir"],
+        dir.to_string_lossy().as_ref()
+    );
+    let manifest = std::fs::read_to_string(dir.join("LOADOUT.md")).unwrap();
+    assert!(manifest.contains("{ name: beta, rank: 27 }"), "{manifest}");
+    let config = std::fs::read_to_string(s.config.join("config.toml")).unwrap();
+    assert!(config.contains("beta-skills"), "{config}");
+
+    let (status, v) = ui.post(
+        "/api/start-own",
+        json!({ "name": "beta-skills", "layer": "team" }),
+    );
+    assert_eq!(status, 400, "exists already: {v}");
+    let (status, _) = ui.post(
+        "/api/start-own",
+        json!({ "name": "Not Kebab", "layer": "team" }),
+    );
+    assert_eq!(status, 400);
+    let (status, _) = ui.post("/api/start-own", json!({ "name": "x", "layer": "--json" }));
+    assert_eq!(status, 400);
+}
+
 /// Promote an item to a broader layer, clone one down to a personal source
 /// (adding you as a co-author), edit its fields, and find items by author.
 #[test]

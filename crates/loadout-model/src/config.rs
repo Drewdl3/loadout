@@ -44,6 +44,10 @@ pub struct Config {
     /// Equal-rank conflict choices (`lo prefer`): `kind/name` → source.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub prefer: BTreeMap<String, String>,
+    /// Your own layer ranks (`lo layers set`): layer → rank. They override
+    /// the defaults, your sources' suggestions and the company config's.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub layers: BTreeMap<String, i64>,
     pub targets: TargetsConfig,
     /// Secret handling.
     #[serde(skip_serializing_if = "SecretsConfig::is_default")]
@@ -185,15 +189,26 @@ impl Membership {
     }
 }
 
-/// A manual source subscription (`[[source]]`).
+/// A source subscription (`[[source]]`). For a URL the company config
+/// lists, the entry only changes where that source sits (`label`,
+/// `layer`, `rank`, `priority`, `ref`). For another source's upstream, it
+/// subscribes you to that upstream directly, placed as it says.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SourceSub {
     pub url: String,
+    /// Display name, shown instead of the source's own name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Rank every item at this layer, items that set their own `layer:`
+    /// included.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// Rank every item at exactly this rank, whatever its layer's rank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<i64>,
     /// Tie-breaker among equal-rank sources; higher wins.
     #[serde(default)]
     pub priority: i64,
@@ -206,11 +221,37 @@ impl SourceSub {
     pub fn new(url: impl Into<String>) -> Self {
         SourceSub {
             url: url.into(),
+            label: None,
             layer: None,
             group: None,
+            rank: None,
             priority: 0,
             git_ref: None,
         }
+    }
+}
+
+/// A change to a `[[source]]` entry: `None` leaves a field alone,
+/// `Some(None)` removes it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceEdit {
+    pub label: Option<Option<String>>,
+    pub layer: Option<Option<String>>,
+    pub rank: Option<Option<i64>>,
+    pub priority: Option<Option<i64>>,
+}
+
+impl SourceEdit {
+    pub fn is_empty(&self) -> bool {
+        self == &SourceEdit::default()
+    }
+
+    /// Whether it sets (not only removes) a field.
+    pub fn sets_anything(&self) -> bool {
+        matches!(self.label, Some(Some(_)))
+            || matches!(self.layer, Some(Some(_)))
+            || matches!(self.rank, Some(Some(_)))
+            || matches!(self.priority, Some(Some(_)))
     }
 }
 
@@ -291,11 +332,17 @@ impl ConfigDoc {
         }
         let mut t = Table::new();
         t.insert("url", value(&sub.url));
+        if let Some(label) = &sub.label {
+            t.insert("label", value(label));
+        }
         if let Some(layer) = &sub.layer {
             t.insert("layer", value(layer));
         }
         if let Some(group) = &sub.group {
             t.insert("group", value(group));
+        }
+        if let Some(rank) = sub.rank {
+            t.insert("rank", value(rank));
         }
         if sub.priority != 0 {
             t.insert("priority", value(sub.priority));
@@ -312,6 +359,78 @@ impl ConfigDoc {
             }
         }
         true
+    }
+
+    /// Changes the `[[source]]` for `url` (adding one if there is none).
+    /// Returns whether anything changed.
+    /// Only removing fields never adds an entry.
+    pub fn edit_source(&mut self, url: &str, edit: &SourceEdit) -> bool {
+        let before = self.doc.to_string();
+        if self.config().source(url).is_none() {
+            if !edit.sets_anything() {
+                return false;
+            }
+            self.add_source(&SourceSub::new(url));
+        }
+        self.source_tables();
+        let norm = normalize_url(url);
+        let Some(Item::ArrayOfTables(a)) = self.doc.get_mut("source") else {
+            unreachable!("source_tables() made it an array of tables");
+        };
+        let t = a
+            .iter_mut()
+            .find(|t| {
+                t.get("url")
+                    .and_then(Item::as_str)
+                    .is_some_and(|u| normalize_url(u) == norm)
+            })
+            .expect("added above");
+        let mut set = |key: &str, v: Option<Option<toml_edit::Value>>| match v {
+            None => {}
+            Some(None) => {
+                t.remove(key);
+            }
+            Some(Some(v)) => {
+                t.insert(key, Item::Value(v));
+            }
+        };
+        set("label", edit.label.clone().map(|v| v.map(Into::into)));
+        set("layer", edit.layer.clone().map(|v| v.map(Into::into)));
+        set("rank", edit.rank.map(|v| v.map(Into::into)));
+        set(
+            "priority",
+            edit.priority.map(|v| v.filter(|p| *p != 0).map(Into::into)),
+        );
+        before != self.doc.to_string()
+    }
+
+    /// Rewrites `source = [{ … }]` (an inline array) as `[[source]]`
+    /// tables so entries can be edited in place.
+    fn source_tables(&mut self) {
+        if let Some(Item::Value(toml_edit::Value::Array(arr))) = self.doc.get("source") {
+            let mut tables = ArrayOfTables::new();
+            for v in arr.iter() {
+                if let toml_edit::Value::InlineTable(t) = v {
+                    tables.push(t.clone().into_table());
+                }
+            }
+            self.doc.insert("source", Item::ArrayOfTables(tables));
+        }
+    }
+
+    /// Sets `[layers] <name> = <rank>`.
+    pub fn set_layer(&mut self, name: &str, rank: i64) {
+        self.table("layers").insert(name, value(rank));
+    }
+
+    /// Removes `[layers] <name>` (and the table once empty). Returns
+    /// whether it was there.
+    pub fn unset_layer(&mut self, name: &str) -> bool {
+        let removed = self.table("layers").remove(name).is_some();
+        if self.table("layers").is_empty() {
+            self.doc.remove("layers");
+        }
+        removed
     }
 
     /// Sets `[toggles] "<id>" = on`.
@@ -615,6 +734,89 @@ link_mode = "symlink"
 
         doc.set_membership(&Membership::default());
         assert!(!doc.to_string().contains("[membership]"));
+    }
+
+    #[test]
+    fn layers_and_source_edits_keep_comments() {
+        let mut doc = ConfigDoc::parse(EXAMPLE).unwrap();
+        doc.set_layer("beta", 27);
+        doc.set_layer("team", 21);
+        let url = "https://github.com/someone/extra-skills.git";
+        assert!(doc.edit_source(
+            url,
+            &SourceEdit {
+                label: Some(Some("Extra (beta)".into())),
+                rank: Some(Some(27)),
+                priority: Some(Some(10)),
+                ..SourceEdit::default()
+            }
+        ));
+        assert!(!doc.edit_source(
+            url,
+            &SourceEdit {
+                rank: Some(Some(27)),
+                ..SourceEdit::default()
+            }
+        ));
+        let text = doc.to_string();
+        assert!(text.contains("# manual subscriptions"), "{text}");
+        let c = Config::parse(&text).unwrap();
+        assert_eq!(c.layers["beta"], 27);
+        assert_eq!(c.layers["team"], 21);
+        let sub = c.source(url).unwrap();
+        assert_eq!(sub.label.as_deref(), Some("Extra (beta)"));
+        assert_eq!(sub.rank, Some(27));
+        assert_eq!(sub.priority, 10);
+        assert_eq!(sub.layer.as_deref(), Some("role"));
+
+        doc.edit_source(
+            url,
+            &SourceEdit {
+                layer: Some(None),
+                rank: Some(None),
+                priority: Some(Some(0)),
+                ..SourceEdit::default()
+            },
+        );
+        let sub = doc.config().source(url).cloned().unwrap();
+        assert_eq!((sub.layer, sub.rank, sub.priority), (None, None, 0));
+
+        // A new URL gets its own entry.
+        assert!(doc.edit_source(
+            "https://example.com/acme/company-listed",
+            &SourceEdit {
+                rank: Some(Some(5)),
+                ..SourceEdit::default()
+            }
+        ));
+        assert_eq!(doc.config().sources.len(), 2);
+
+        // Only removing fields from a URL without an entry adds nothing.
+        assert!(!doc.edit_source(
+            "https://example.com/acme/upstream-only",
+            &SourceEdit {
+                label: Some(None),
+                ..SourceEdit::default()
+            }
+        ));
+        assert_eq!(doc.config().sources.len(), 2);
+
+        // An inline `source = [...]` array is edited too.
+        let mut inline =
+            ConfigDoc::parse("source = [{ url = \"https://example.com/a\" }]\n").unwrap();
+        assert!(inline.edit_source(
+            "https://example.com/a",
+            &SourceEdit {
+                rank: Some(Some(3)),
+                ..SourceEdit::default()
+            }
+        ));
+        assert_eq!(inline.config().sources[0].rank, Some(3));
+
+        assert!(doc.unset_layer("beta"));
+        assert!(!doc.unset_layer("beta"));
+        assert!(doc.unset_layer("team"));
+        assert!(!doc.to_string().contains("[layers]"));
     }
 
     #[test]

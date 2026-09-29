@@ -10,6 +10,7 @@ use crate::ModelError;
 use crate::frontmatter::Document;
 use crate::id::{ItemKind, validate_source_name};
 use crate::item::LoadoutBlock;
+use crate::layer::Layer;
 
 /// The only manifest schema version this build understands.
 pub const MANIFEST_VERSION: u32 = 1;
@@ -26,6 +27,13 @@ pub struct Manifest {
     pub name: String,
     /// Default layer for items in this repo.
     pub layer: String,
+    /// Suggested ranks for layers this source uses, e.g. its own
+    /// `{ name: beta, rank: 27 }`. The company config's layers and your
+    /// `config.toml` override them; when two sources disagree, the higher
+    /// rank is used. Sources can't rank `company`, or anything at or below
+    /// it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<Layer>,
     /// Default group. Required unless the company config maps this source to a group.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
@@ -59,7 +67,8 @@ pub struct Manifest {
     pub extra: BTreeMap<String, Value>,
 }
 
-/// An entry of `upstream:`: a Git URL (or path), optionally with a ref.
+/// An entry of `upstream:`: a Git URL (or path), optionally with a ref and
+/// where it sits for this source's subscribers.
 /// A URL starting with `./` or `../` is relative to the declaring source's
 /// own URL, like a Git submodule URL (`../eng-skills` is a sibling repo).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -71,6 +80,18 @@ pub enum Upstream {
         /// Branch, tag or commit to follow instead of the default branch.
         #[serde(default, rename = "ref", skip_serializing_if = "Option::is_none")]
         git_ref: Option<String>,
+        /// Display name for the upstream.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+        /// Rank all its items at this layer, their own `layer:` included.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        layer: Option<String>,
+        /// Rank all its items at exactly this rank.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rank: Option<i64>,
+        /// Tie-breaker among equal-rank sources; higher wins.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        priority: Option<i64>,
     },
 }
 
@@ -85,6 +106,34 @@ impl Upstream {
         match self {
             Upstream::Url(_) => None,
             Upstream::Detailed { git_ref, .. } => git_ref.as_deref(),
+        }
+    }
+
+    pub fn label(&self) -> Option<&str> {
+        match self {
+            Upstream::Url(_) => None,
+            Upstream::Detailed { label, .. } => label.as_deref(),
+        }
+    }
+
+    pub fn layer(&self) -> Option<&str> {
+        match self {
+            Upstream::Url(_) => None,
+            Upstream::Detailed { layer, .. } => layer.as_deref(),
+        }
+    }
+
+    pub fn rank(&self) -> Option<i64> {
+        match self {
+            Upstream::Url(_) => None,
+            Upstream::Detailed { rank, .. } => *rank,
+        }
+    }
+
+    pub fn priority(&self) -> Option<i64> {
+        match self {
+            Upstream::Url(_) => None,
+            Upstream::Detailed { priority, .. } => *priority,
         }
     }
 
@@ -221,6 +270,30 @@ impl ManifestDoc {
         if let Some(u) = manifest.upstream.iter().find(|u| u.url().trim().is_empty()) {
             return Err(ModelError::InvalidManifest(format!(
                 "upstream entries need a URL, got {u:?}"
+            )));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for l in &manifest.layers {
+            if l.name.trim().is_empty() {
+                return Err(ModelError::InvalidManifest(
+                    "layers entries need a name".into(),
+                ));
+            }
+            if !seen.insert(l.name.as_str()) {
+                return Err(ModelError::InvalidManifest(format!(
+                    "layer {:?} is listed twice in layers",
+                    l.name
+                )));
+            }
+        }
+        if let Some(u) = manifest
+            .upstream
+            .iter()
+            .find(|u| u.layer().is_some_and(|l| l.trim().is_empty()))
+        {
+            return Err(ModelError::InvalidManifest(format!(
+                "upstream {} has an empty layer",
+                u.url()
             )));
         }
         if let Some(p) = manifest.nested.iter().find(|p| !is_inner_path(p)) {
@@ -363,6 +436,34 @@ Free-form docs for humans.
         assert!(
             ManifestDoc::parse("---\nloadout: 1\nname: x\nlayer: t\nupstream: ['']\n---\n")
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn layers_and_upstream_placement() {
+        let doc = ManifestDoc::parse(
+            "---\nloadout: 1\nname: x\nlayer: beta\nlayers: [{ name: beta, rank: 27 }]\nupstream:\n  - { url: ../eng, label: Engineering, layer: org, rank: 12, priority: 3 }\n---\n",
+        )
+        .unwrap();
+        let m = &doc.manifest;
+        assert_eq!(m.layers[0].name, "beta");
+        assert_eq!(m.layers[0].rank, 27);
+        let up = &m.upstream[0];
+        assert_eq!(up.label(), Some("Engineering"));
+        assert_eq!(up.layer(), Some("org"));
+        assert_eq!(up.rank(), Some(12));
+        assert_eq!(up.priority(), Some(3));
+        assert!(
+            ManifestDoc::parse(
+                "---\nloadout: 1\nname: x\nlayer: t\nlayers: [{ name: t, rank: 1 }, { name: t, rank: 2 }]\n---\n"
+            )
+            .is_err()
+        );
+        assert!(
+            ManifestDoc::parse(
+                "---\nloadout: 1\nname: x\nlayer: t\nupstream: [{ url: ../y, layer: '' }]\n---\n"
+            )
+            .is_err()
         );
     }
 

@@ -6,6 +6,7 @@
 pub mod enabled;
 pub mod frontmatter_edit;
 pub mod hash;
+pub mod layers;
 pub mod links;
 pub mod mcp;
 pub mod resolve;

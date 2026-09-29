@@ -11,10 +11,9 @@ use loadout_core::resolve::EnabledBy;
 use loadout_git::Git;
 use loadout_model::config::normalize_url;
 use loadout_model::manifest::{MANIFEST_FILE, SourcePaths};
-use loadout_model::{ItemKey, ItemKind, LayerModel, ManifestDoc};
+use loadout_model::{ItemKey, ItemKind, ManifestDoc};
 
 use crate::ctx::Ctx;
-use crate::membership;
 use crate::state::Resolved;
 
 /// A source the user can edit.
@@ -121,15 +120,9 @@ pub fn check_editable(ctx: &Ctx, source_dir: &Path, key: &ItemKey) -> Result<()>
     };
     let text = std::fs::read_to_string(source_dir.join(MANIFEST_FILE))?;
     let manifest = ManifestDoc::parse(&text)?.manifest;
-    let layers = match ctx.load_config()?.company_config {
-        Some(url) if ctx.paths.project.is_none() => {
-            membership::load_company_config(ctx, &Git::new(), &url, false)
-                .map(|c| c.company_config.layer_model())
-                .unwrap_or_default()
-        }
-        _ => LayerModel::default(),
-    };
-    let my_rank = layers.rank(&manifest.layer).unwrap_or(i64::MAX);
+    // Locks hold at declared ranks, whatever anyone re-ranked locally.
+    let (layers, _) = crate::layers::current(ctx)?;
+    let my_rank = layers.declared_rank(&manifest.layer).unwrap_or(i64::MAX);
     let Some(winner) = &entry.winner else {
         return Ok(());
     };
@@ -141,7 +134,8 @@ pub fn check_editable(ctx: &Ctx, source_dir: &Path, key: &ItemKey) -> Result<()>
     };
     let binding =
         trail.locked || !trail.overridable || entry.enabled_by == Some(EnabledBy::Required);
-    if binding && trail.rank.is_some_and(|r| r < my_rank) {
+    let their_rank = trail.lock_rank.or(trail.rank);
+    if binding && their_rank.is_some_and(|r| r < my_rank) {
         bail!(
             "{key} is {} by {winner} ({} layer); it can't be edited from {} ({} layer)",
             if trail.locked || !trail.overridable {

@@ -5,6 +5,7 @@ pub mod commands;
 pub mod ctx;
 pub mod edit;
 pub mod engine;
+pub mod layers;
 pub mod mcp;
 pub mod membership;
 pub mod paths;
@@ -72,7 +73,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// First-time setup from your company config repo.
+    /// First-time setup: connect to a source or company config by its URL,
+    /// or create your own.
     Init(commands::init::InitArgs),
     /// View or change your group membership.
     Profile(commands::profile::ProfileArgs),
@@ -84,6 +86,10 @@ enum Command {
     Subscribe(commands::subscribe::SubscribeArgs),
     /// Remove a manual source subscription.
     Unsubscribe(commands::subscribe::UnsubscribeArgs),
+    /// Change where a source sits for you: its label, layer, rank or priority.
+    Source(commands::source::SourceArgs),
+    /// List the layers in effect and where each rank came from, or rank them yourself.
+    Layers(commands::layers::LayersArgs),
     /// Fetch sources and install their items into your AI tools.
     Sync(commands::sync::SyncArgs),
     /// Last sync, pending changes, audit and conflict summary.
@@ -167,6 +173,8 @@ pub fn run() -> ExitCode {
         Command::Leave(args) => commands::profile::leave(&ctx, args),
         Command::Subscribe(args) => commands::subscribe::subscribe(&ctx, args),
         Command::Unsubscribe(args) => commands::subscribe::unsubscribe(&ctx, args),
+        Command::Source(args) => commands::source::run(&ctx, args),
+        Command::Layers(args) => commands::layers::run(&ctx, args),
         Command::Sync(args) => commands::sync::run(&ctx, args),
         Command::Status(args) => commands::review::status(&ctx, args),
         Command::Diff(args) => commands::review::diff(&ctx, args),

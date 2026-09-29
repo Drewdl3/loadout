@@ -8,7 +8,7 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use loadout_model::{ItemId, ItemKey, LayerModel, Mode, Profile};
+use loadout_model::{ItemId, ItemKey, LayerModel, Mode, Profile, RankOrigin};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,21 @@ pub struct Candidate {
     /// The source's tie-breaker priority; higher wins.
     pub priority: i64,
     pub content_hash: String,
+    /// The source's display name (its subscription's `label`).
+    pub label: Option<String>,
+    /// Where the subscriber put the source, overriding the rank of the
+    /// item's layer. Locks ignore it.
+    pub placement: Option<Placement>,
+}
+
+/// A subscription's `layer` / `rank` for a source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Placement {
+    /// Rank every item at this layer's rank.
+    pub layer: Option<String>,
+    /// Rank every item at exactly this rank (wins over `layer`).
+    pub rank: Option<i64>,
+    pub from: RankOrigin,
 }
 
 /// Everything resolution depends on.
@@ -109,7 +124,8 @@ impl Outcome {
 pub enum Rule {
     /// It was the only eligible candidate.
     Only,
-    /// The most general locked / non-overridable candidate wins outright.
+    /// The most general locked / non-overridable candidate wins outright,
+    /// compared at the ranks their layers were declared at.
     Locked,
     /// The most specific (highest-rank) candidate wins.
     HighestRank,
@@ -130,7 +146,24 @@ pub struct Trail {
     /// `None` for layers missing from the layer model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rank: Option<i64>,
+    /// Where `rank` came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank_from: Option<RankOrigin>,
+    /// The layer a subscription put the source at, when it did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed_at: Option<String>,
+    /// The rank locks compare, when it differs from `rank`: the one the
+    /// item's layer was declared at, before any local re-rank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock_rank: Option<i64>,
+    /// A lock decided this item, so this candidate's local re-rank had no
+    /// effect.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rerank_ignored: bool,
     pub priority: i64,
+    /// The source's display name, from its subscription.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     pub locked: bool,
     pub overridable: bool,
     #[serde(flatten)]
@@ -264,15 +297,15 @@ fn resolve_group(
     warnings: &mut Vec<Warning>,
 ) -> Resolved {
     let mut trails: BTreeMap<&ItemId, Trail> = BTreeMap::new();
-    let mut eligible: Vec<(&Candidate, i64)> = Vec::new();
+    let mut eligible: Vec<Ranked<'_>> = Vec::new();
 
-    // Step 2: filter by membership, applies_to and target.
+    // Step 2: filter by layer, membership, applies_to and target.
     for c in cands {
-        let rank = input.layers.rank(&c.layer);
-        let filtered = if rank.is_none() {
+        let r = rank_of(input.layers, c);
+        let filtered = if r.rank.is_none() {
             warnings.push(Warning::UnknownLayer {
                 id: c.id.clone(),
-                layer: c.layer.clone(),
+                layer: r.layer.to_owned(),
             });
             Some(Outcome::UnknownLayer)
         } else if c
@@ -292,15 +325,28 @@ fn resolve_group(
         };
         trails.insert(
             &c.id,
-            trail(c, rank, filtered.clone().unwrap_or(Outcome::Winner)),
+            trail(c, &r, filtered.clone().unwrap_or(Outcome::Winner)),
         );
         if filtered.is_none() {
-            eligible.push((c, rank.expect("checked above")));
+            eligible.push(Ranked {
+                c,
+                rank: r.rank.expect("checked above"),
+                lock_rank: r.lock_rank.expect("set with rank"),
+            });
         }
     }
 
     // Step 4: pick a winner.
     let decision = pick_winner(input, key, &eligible);
+    // Any eligible lock decides at declared ranks, so re-ranks don't count.
+    if eligible.iter().any(|e| e.c.locked || !e.c.overridable) {
+        for e in eligible.iter().filter(|e| e.rank != e.lock_rank) {
+            trails
+                .get_mut(&e.c.id)
+                .expect("trail exists")
+                .rerank_ignored = true;
+        }
+    }
     let (winner, rule) = match &decision {
         Some((w, rule, losers)) => {
             for (id, outcome) in losers {
@@ -370,27 +416,77 @@ fn resolve_group(
 
 type Decision<'c> = (&'c Candidate, Rule, Vec<(&'c ItemId, Outcome)>);
 
+/// An eligible candidate with its effective rank and the rank locks use.
+#[derive(Clone, Copy)]
+struct Ranked<'c> {
+    c: &'c Candidate,
+    rank: i64,
+    lock_rank: i64,
+}
+
+/// A candidate's effective rank, where it came from, and its lock rank.
+struct RankInfo<'c> {
+    /// The layer whose rank applies (the placement's, else the item's).
+    layer: &'c str,
+    rank: Option<i64>,
+    from: Option<RankOrigin>,
+    lock_rank: Option<i64>,
+}
+
+fn rank_of<'c>(layers: &LayerModel, c: &'c Candidate) -> RankInfo<'c> {
+    let own = || {
+        (
+            layers.rank(&c.layer),
+            layers.get(&c.layer).map(|l| l.from.clone()),
+        )
+    };
+    let (layer, (rank, from)) = match &c.placement {
+        Some(Placement {
+            rank: Some(r),
+            from,
+            ..
+        }) => (c.layer.as_str(), (Some(*r), Some(from.clone()))),
+        Some(Placement {
+            layer: Some(l),
+            from,
+            ..
+        }) => (l.as_str(), (layers.rank(l), Some(from.clone()))),
+        _ => (c.layer.as_str(), own()),
+    };
+    // Locks use the rank the item's own layer was declared at; a layer
+    // nothing declares falls back to the effective rank.
+    let lock_rank = rank.map(|r| layers.declared_rank(&c.layer).unwrap_or(r));
+    RankInfo {
+        layer,
+        rank,
+        from,
+        lock_rank,
+    }
+}
+
 fn pick_winner<'c>(
     input: &Input<'_>,
     key: &ItemKey,
-    eligible: &[(&'c Candidate, i64)],
+    eligible: &[Ranked<'c>],
 ) -> Option<Decision<'c>> {
     if eligible.is_empty() {
         return None;
     }
     let preferred = input.prefer.get(&key.to_string()).map(String::as_str);
 
-    let locking: Vec<&(&Candidate, i64)> = eligible
+    let locking: Vec<&Ranked<'c>> = eligible
         .iter()
-        .filter(|(c, _)| c.locked || !c.overridable)
+        .filter(|e| e.c.locked || !e.c.overridable)
         .collect();
 
-    if let Some(min_rank) = locking.iter().map(|(_, r)| *r).min() {
-        // Step 4.1: the most general locking candidate wins outright.
-        let pool: Vec<(&Candidate, i64)> = locking
+    if let Some(min_rank) = locking.iter().map(|e| e.lock_rank).min() {
+        // Step 4.1: the most general locking candidate wins outright, at
+        // the rank its layer was declared at: a local re-rank never
+        // changes which lock wins.
+        let pool: Vec<&Candidate> = locking
             .iter()
-            .filter(|(_, r)| *r == min_rank)
-            .map(|x| **x)
+            .filter(|e| e.lock_rank == min_rank)
+            .map(|e| e.c)
             .collect();
         let (winner, tie_rule, mut losers) = break_tie(&pool, preferred);
         let rule = if pool.len() == 1 {
@@ -398,14 +494,14 @@ fn pick_winner<'c>(
         } else {
             tie_rule
         };
-        for (c, r) in eligible {
-            if c.id == winner.id || pool.iter().any(|(p, _)| p.id == c.id) {
+        for e in eligible {
+            if e.c.id == winner.id || pool.iter().any(|p| p.id == e.c.id) {
                 continue;
             }
             let by = winner.id.clone();
             losers.push((
-                &c.id,
-                if *r > min_rank {
+                &e.c.id,
+                if e.lock_rank > min_rank {
                     Outcome::BlockedOverride { by }
                 } else {
                     Outcome::LostToLocked { by }
@@ -416,11 +512,11 @@ fn pick_winner<'c>(
     }
 
     // Step 4.2: the most specific candidate wins.
-    let max_rank = eligible.iter().map(|(_, r)| *r).max().expect("non-empty");
-    let pool: Vec<(&Candidate, i64)> = eligible
+    let max_rank = eligible.iter().map(|e| e.rank).max().expect("non-empty");
+    let pool: Vec<&Candidate> = eligible
         .iter()
-        .filter(|(_, r)| *r == max_rank)
-        .copied()
+        .filter(|e| e.rank == max_rank)
+        .map(|e| e.c)
         .collect();
     let (winner, tie_rule, mut losers) = break_tie(&pool, preferred);
     let rule = if eligible.len() == 1 {
@@ -430,10 +526,10 @@ fn pick_winner<'c>(
     } else {
         tie_rule
     };
-    for (c, r) in eligible {
-        if *r < max_rank {
+    for e in eligible {
+        if e.rank < max_rank {
             losers.push((
-                &c.id,
+                &e.c.id,
                 Outcome::Outranked {
                     by: winner.id.clone(),
                 },
@@ -447,10 +543,10 @@ fn pick_winner<'c>(
 /// as a priority bump for that one item), then source priority, then the
 /// lexicographically first source id (a conflict).
 fn break_tie<'c>(
-    pool: &[(&'c Candidate, i64)],
+    pool: &[&'c Candidate],
     preferred: Option<&str>,
 ) -> (&'c Candidate, Rule, Vec<(&'c ItemId, Outcome)>) {
-    let mut ordered: Vec<&Candidate> = pool.iter().map(|(c, _)| *c).collect();
+    let mut ordered: Vec<&Candidate> = pool.to_vec();
     ordered.sort_by(|a, b| {
         is_pref(b, preferred)
             .cmp(&is_pref(a, preferred))
@@ -496,13 +592,18 @@ fn rule_max(a: Rule, b: Rule) -> Rule {
     if order(b) > order(a) { b } else { a }
 }
 
-fn trail(c: &Candidate, rank: Option<i64>, outcome: Outcome) -> Trail {
+fn trail(c: &Candidate, r: &RankInfo<'_>, outcome: Outcome) -> Trail {
     Trail {
         id: c.id.clone(),
         layer: c.layer.clone(),
         group: c.group.clone(),
-        rank,
+        rank: r.rank,
+        rank_from: r.from.clone(),
+        placed_at: (r.layer != c.layer).then(|| r.layer.to_owned()),
+        lock_rank: r.lock_rank.filter(|l| Some(*l) != r.rank),
+        rerank_ignored: false,
         priority: c.priority,
+        label: c.label.clone(),
         locked: c.locked,
         overridable: c.overridable,
         outcome,

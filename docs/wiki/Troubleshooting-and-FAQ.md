@@ -105,7 +105,18 @@ if your company config uses them, asks GitHub or GitLab which teams you're in.
 Loadout release (turn the second off with `check_for_updates = false`).
 That's all.
 
-**Can I use it without a company config?** Yes. `lo subscribe` any source.
+**Can I use it without a company config?** Yes, that's how most teams
+start. `lo init <link>` (or `lo subscribe`) any source; its upstreams come
+with it.
+
+**A source I'm subscribed to ranks the wrong way for me.** Re-rank it for
+yourself: `lo source set <name> --rank <n>`, or a whole layer with
+`lo layers set <layer>=<n>`. `lo layers` shows where every rank came from.
+Locked items don't move.
+
+**`lo sync` warns that sources disagree on a layer's rank.** Two sources
+suggest different ranks for the same layer in their `layers:`; the higher
+one is used. Pick your own with `lo layers set <layer>=<rank>`.
 
 **Is it safe to run `lo sync` often?** Yes. It's idempotent: running it
 twice in a row changes nothing the second time.

@@ -17,10 +17,12 @@ pub mod template;
 pub mod time;
 
 pub use company_config::{CompanyConfig, GroupDef, Policy, Rule, Signer};
-pub use config::{Config, ConfigDoc, Groups, LinkMode, Membership, SourceSub, TargetsConfig};
+pub use config::{
+    Config, ConfigDoc, Groups, LinkMode, Membership, SourceEdit, SourceSub, TargetsConfig,
+};
 pub use id::{ItemId, ItemKey, ItemKind};
 pub use item::{ItemMeta, LoadoutBlock, Mode};
-pub use layer::{Layer, LayerModel, Profile};
+pub use layer::{Layer, LayerModel, LayerRank, Profile, RankOrigin};
 pub use lock::{Lock, LockedItem, LockedSource};
 pub use manifest::{Manifest, ManifestDoc, SourcePaths, Upstream};
 pub use mcp::{McpFrontmatter, McpServer, Transport};

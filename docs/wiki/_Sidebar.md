@@ -9,7 +9,7 @@
 
 **Share and run it**
 - [Sharing skills](Sharing-Skills.md)
-- [Setting up your company](Setting-Up-Your-Company.md)
+- [Growing across your org](Growing-Across-Your-Org.md)
 - [Tool connections and secrets](Tool-Connections-and-Secrets.md)
 - [Updates and review](Updates-and-Review.md)
 - [AI tools](AI-Tools.md)

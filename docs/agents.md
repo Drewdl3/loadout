@@ -8,33 +8,42 @@ useful cheat sheet too.
 Two skills carry the short versions into any tool:
 [`loadout`](../shims/claude-code/skills/loadout/SKILL.md) (using the CLI) and
 [`loadout-authoring`](../shims/claude-code/skills/loadout-authoring/SKILL.md)
-(writing sources). A company config can ship both, so every agent in the company
-gets them ([docs/any-agent.md](any-agent.md)). Every repo made by
+(writing sources). A team's source (or a company config) can ship both, so
+every agent of everyone subscribed gets them ([docs/any-agent.md](any-agent.md)). Every repo made by
 `lo new-source` or `lo init --new-source` also contains an `AGENTS.md`
 with that repo's names already filled in.
 
 ## The model
 
 ```
-company config (company:acme)            the root source: layers, groups, membership, policy
-├── group org:eng           ──▶ source eng-skills          (rank 10)
-│   └── group team:payments-dev ──▶ source payments-skills (rank 20)
-│       └── group squad:checkout ──▶ source checkout-squad (rank 30, upstream: payments-skills)
-├── group role:product-manager ──▶ source pm-presets        (rank 40)
-└── (you) user:jane        ──▶ source jane-skills         (rank 50, personal)
+you (user:jane) ──lo init <link>──▶ source checkout-squad   (squad, rank 30)
+                                     └─ upstream ▶ payments-skills (team, rank 20)
+                                          └─ upstream ▶ eng-skills (org, rank 10)
+                ──subscribe──────▶ source beta-skills       (beta, rank 27: its own layer)
+                ──personal───────▶ source jane-skills       (user, rank 50)
+
+optional: company config (company:acme): layers, groups → sources, membership, policy
 ```
 
 - A **source** is a Git repo with a `LOADOUT.md` at its top. It holds **items**:
   `skill/<name>`, `mcp/<name>`, `agent/<name>`, `plugin/<name>`,
   `extra/<type>.<name>`.
-- The **company config** is the company's root source. It names the **layers** and
-  their **ranks**, lists every **group** (`team:payments-dev`), the sources that
-  group owns, and how membership is discovered (`github_team`, `env`, …).
+- People **subscribe** to sources, usually their team's (`lo init <url>`),
+  and get each source's **upstreams** (`upstream:`) too. Subscribing makes
+  you a member of the source's group.
+- **Layers** rank sources. The ranks merge, later winning: built-in
+  defaults, the `layers:` of subscribed sources, the company config's
+  `company.layers`, the user's `[layers]` (`lo layers`). Each subscriber can
+  also place a source at another layer or rank (`lo source set`).
+- An optional **company config** is a source with a `company:` block. It
+  lists every **group** (`team:payments-dev`), the sources that group owns,
+  and how membership is discovered (`github_team`, `env`, …), plus policy.
 - A person's **profile** is the set of groups they belong to. `lo sync`
-  collects the items of every source in the profile. When two sources provide
+  collects the items of every source they get. When two sources provide
   the same `kind/name`, the **higher rank wins** (more specific beats more
   general), unless a more general one set `locked: true` or
-  `overridable: false`.
+  `overridable: false`. Locks are compared at **declared** ranks (before any
+  local re-rank), so re-ranking never changes which lock wins.
 - The winners are linked or rendered into each AI tool's own directories
   (`~/.claude/skills`, `~/.claude.json`, `~/.cursor/…`). Those copies belong to
   Loadout: the next sync overwrites any edits made there.
@@ -60,6 +69,9 @@ command's JSON Schema is in [`schemas/cli/`](../schemas/cli/).
 | Find something | `lo search "specs" [--kind skill] [--tag t] [--role r] [--all-sources]` |
 | Turn one on or off | `lo enable <source:kind/name>` / `lo disable …` |
 | Pick between two equal-rank sources | `lo prefer <source:kind/name>` |
+| Layers in effect, with where each rank came from | `lo layers` |
+| Re-rank a layer or a source for the user | `lo layers set beta=27`, `lo source set <url-or-name> --rank 35 [--label L] [--layer l] [--priority n]` |
+| Connect to a link someone shared (source or company config) | `lo init <url> --non-interactive` |
 | What a repo would bring | `lo subscribe <url-or-path> --dry-run` |
 | Pending updates | `lo status`, `lo diff [<source>]` |
 | Health | `lo doctor` |
@@ -77,8 +89,11 @@ lo init --new-source checkout-squad --layer squad --group checkout \
   --upstream https://git.example.com/acme/payments-skills --git-init
 ```
 
-`--layer` must be a layer the company config defines (see its `company.layers`);
-`--layer user` makes a personal source. Names are kebab-case. This writes:
+`--layer` is any layer: a built-in one (`company`, `org`, `team`,
+`product`, `squad`, `project`, `role`), one your company config defines, or
+one of your own with `--rank` to suggest where it ranks
+(`--layer beta --rank 27`). `--layer user` makes a personal source. Names
+are kebab-case. This writes:
 
 ```
 checkout-squad/
@@ -112,8 +127,15 @@ description: Skills for the Checkout squad.
 owners: ["@acme/checkout"]    # shown in `lo why`
 defaults:
   mode: default-on            # required | default-on | default-off
+layers:                       # suggested ranks for layers of your own (optional; must be above company's)
+  - { name: pods, rank: 32 }
 upstream:                     # higher sources subscribers also get
   - https://git.example.com/acme/payments-skills
+  - url: ../beta-skills         # relative to this repo's URL
+    label: Beta (payments)      # where it sits for this source's subscribers:
+    layer: product              #   its items' layer, their own included,
+    rank: 27                    #   or an exact rank,
+    priority: 10                #   and the tie-breaker (all optional)
 nested: [pods]                # folders holding more LOADOUT.md files (optional)
 ---
 
@@ -244,7 +266,31 @@ To use one: `lo template list`, `lo template show pr-workflow`, then
 `--dir <checkout>` for a local clone. The copy records
 `loadout: { from_template: "<source>:template/pr-workflow@<commit>" }`.
 
-### A company config
+### Where a source sits for a subscriber
+
+The subscriber's `config.toml` decides, overriding `upstream:` entries:
+
+```toml
+[layers]
+beta = 27                   # re-rank a layer (lo layers set beta=27)
+
+[[source]]
+url = "https://git.example.com/acme/beta-skills"
+label = "Beta (payments)"   # display name in lo why, lo list, lo ui
+layer = "product"           # rank every item at this layer, item-level layer: included
+rank = 27                   # or exactly this rank
+priority = 10               # tie-break within a rank
+```
+
+A `[[source]]` for a URL the company config lists only places it (unless the
+company config sets `policy.allow_local_ranks: false`); one for an upstream's
+URL subscribes to that upstream directly. Placements apply to the repo's
+root source, not its nested ones. Locks ignore all of this.
+
+### A company config (optional)
+
+Add one once several teams use Loadout and you want groups discovered
+automatically, or company-wide policy.
 
 ```sh
 lo init --new-company acme-config --company acme \
@@ -260,6 +306,10 @@ groups:
     sources: ["https://git.example.com/acme/checkout-squad"]
     membership: { github_team: "acme/checkout" }   # or env, exec, repo_access, manual, any/all
 ```
+
+`company.policy` takes `auto_apply` (layers whose updates skip review),
+`allow_manual_sources`, `allow_local_ranks` (may people re-rank the company
+config's layers and sources; locks hold either way) and `require_signed`.
 
 ## Check your work
 

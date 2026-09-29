@@ -19,7 +19,7 @@ comes from: `payments-skills:skill/write-spec`.
 
 ## Sources: where items live
 
-A **source** is a Git repo of items, usually one per group. It has a
+A **source** is a Git repo of items, usually one per team. It has a
 `LOADOUT.md` file at the top saying who it's for, and items in folders:
 
 ```text
@@ -37,7 +37,9 @@ requests) and ownership for free.
 
 A source can **build on** another one with `upstream:`. The Checkout squad's
 source can name Payments' source as its upstream, and anyone who adds the
-Checkout source gets Payments' items too.
+Checkout source gets Payments' items too. That's how Loadout grows: each
+team connects to the teams around it, and you only ever need your own
+team's link (`lo init <link>`).
 
 One repo can also hold **several sources**: a team's items at the top and a
 folder per squad, each with its own `LOADOUT.md` (the root one lists the
@@ -46,8 +48,9 @@ those of the squads you're in.
 
 ## Groups and layers: who gets what
 
-A **group** (the CLI and file formats call it a *group*) is a set of people: the company,
-Engineering, the Payments team, product managers, or just you.
+A **group** is a set of people: the Payments team, Engineering, product
+managers, the whole company, or just you. Connecting to a team's source puts
+you in its group.
 
 A **layer** (a *layer*) is a kind of group, with a **rank**:
 
@@ -62,22 +65,28 @@ A **layer** (a *layer*) is a kind of group, with a **rank**:
 | `role` | 40 | developer, product-manager |
 | `user` | 50 | you |
 
-A higher rank is more specific, closer to you. A company can choose its own
-layer names and ranks.
+A higher rank is more specific, closer to you. The names and ranks aren't
+fixed: a source can add a layer of its own (`layers: [{ name: beta, rank:
+27 }]`), a company config can define its own set, and you can re-rank any
+layer or source for yourself (`lo layers set beta=27`,
+`lo source set beta-skills --rank 35`). `lo layers` shows the ranks in
+effect and where each came from.
 
 You get an item when you're in its group. When two layers have an item with
 the same name, the higher rank wins, unless the lower one **locked** it. That's
 the whole of [How layers work](How-Layers-Work.md).
 
-## The company config: the company's list of groups
+## The company config: optional, for later
 
-A **company config** is one special source that lists every group, its sources, and
-how to tell who belongs to it (GitHub or GitLab teams, your SSO, an
-environment variable, or "join it yourself"). With a company config, one link sets
-everyone up: `lo init <company config-link>`. Without one, people add sources
-themselves with `lo subscribe`.
+A **company config** is one special source that lists every group, its
+sources, and how to tell who belongs to it (GitHub or GitLab teams, your
+SSO, an environment variable, or "join it yourself"). You don't need one:
+team sources connected through `upstream:` work on their own. Once many
+teams use Loadout, a company config lets it work out everyone's groups
+automatically and set company-wide rules. `lo init <link>` accepts either
+kind of link.
 
-See [Setting up your company](Setting-Up-Your-Company.md).
+See [Growing across your org](Growing-Across-Your-Org.md).
 
 ## AI tools: where items end up
 
@@ -93,8 +102,8 @@ See [AI tools](AI-Tools.md).
 
 ```mermaid
 flowchart LR
-  company config["Company config<br/><i>lists groups and sources</i>"] --> groups["Your groups<br/><i>company, org, team, role</i>"]
-  groups --> sources["Their sources<br/><i>Git repos of items</i>"]
+  link["Your team's source<br/><i>lo init &lt;link&gt;</i>"] --> sources["It and its upstreams<br/><i>Git repos of items</i>"]
+  company["Company config<br/><i>optional: finds your groups</i>"] -.-> sources
   sources --> layers["Stacked as layers<br/><i>closest to you wins</i>"]
   layers --> tools["Your AI tools"]
 ```

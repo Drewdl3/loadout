@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::ModelError;
 use crate::config::normalize_url;
-use crate::layer::{Layer, LayerModel};
+use crate::layer::Layer;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -117,6 +117,11 @@ pub struct Policy {
     pub require_signed: Vec<String>,
     /// May users subscribe to repos not listed in the company config?
     pub allow_manual_sources: bool,
+    /// May users re-rank the company config's layers (`[layers]` in
+    /// `config.toml`) and the sources it lists (`rank` / `layer` on a
+    /// `[[source]]` or `upstream:` entry)? Locks are never affected by a
+    /// re-rank either way.
+    pub allow_local_ranks: bool,
 }
 
 impl Default for Policy {
@@ -125,6 +130,7 @@ impl Default for Policy {
             auto_apply: Vec::new(),
             require_signed: Vec::new(),
             allow_manual_sources: true,
+            allow_local_ranks: true,
         }
     }
 }
@@ -211,12 +217,6 @@ impl CompanyConfig {
         Ok(())
     }
 
-    /// The company config's layers, plus `user` above them all unless the
-    /// company config ranks it itself.
-    pub fn layer_model(&self) -> LayerModel {
-        LayerModel::new(self.layers.iter().map(|s| (s.name.as_str(), s.rank))).with_user_layer()
-    }
-
     pub fn group(&self, layer: &str, name: &str) -> Option<&GroupDef> {
         self.groups
             .iter()
@@ -289,7 +289,7 @@ company:
     fn parses_example() {
         let c = parse(EXAMPLE_COMPANY).unwrap();
         assert_eq!(c.name, "acme");
-        assert_eq!(c.layer_model().rank("role"), Some(40));
+        assert!(c.layers.iter().any(|l| l.name == "role" && l.rank == 40));
         assert_eq!(c.groups.len(), 5);
         let pay = c.group("team", "payments-dev").unwrap();
         assert_eq!(
@@ -319,6 +319,7 @@ company:
         .unwrap();
         assert_eq!(c.groups[0].membership, Rule::Manual(true));
         assert!(c.policy.allow_manual_sources);
+        assert!(c.policy.allow_local_ranks);
     }
 
     #[test]

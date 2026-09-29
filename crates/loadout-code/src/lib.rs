@@ -57,6 +57,9 @@ pub struct Payload {
     /// Enabled target ids.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub targets: Vec<String>,
+    /// Your own layer ranks (`[layers]`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub layers: BTreeMap<String, i64>,
 }
 
 /// A manual source subscription with its pinned commit.
@@ -71,6 +74,10 @@ pub struct SourcePin {
     pub group: Option<String>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub priority: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<i64>,
 }
 
 fn is_zero(n: &i64) -> bool {
@@ -215,6 +222,8 @@ mod tests {
                 layer: Some("role".into()),
                 group: Some("developer".into()),
                 priority: 1,
+                label: Some("Extra (beta)".into()),
+                rank: Some(27),
             }],
             pins: [(
                 "https://git.example.com/acme/company-config".to_string(),
@@ -224,6 +233,7 @@ mod tests {
             toggles: [("eng-skills:skill/incident-runbook".to_string(), true)].into(),
             prefer: BTreeMap::new(),
             targets: vec!["claude-code".into()],
+            layers: [("beta".to_string(), 27)].into(),
         }
     }
 

@@ -88,7 +88,7 @@
           "const": "only"
         },
         {
-          "description": "The most general locked / non-overridable candidate wins outright.",
+          "description": "The most general locked / non-overridable candidate wins outright,\ncompared at the ranks their layers were declared at.",
           "type": "string",
           "const": "locked"
         },
@@ -146,9 +146,46 @@
           ],
           "format": "int64"
         },
+        "rank_from": {
+          "description": "Where `rank` came from.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RankOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "placed_at": {
+          "description": "The layer a subscription put the source at, when it did.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lock_rank": {
+          "description": "The rank locks compare, when it differs from `rank`: the one the\nitem's layer was declared at, before any local re-rank.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "rerank_ignored": {
+          "description": "A lock decided this item, so this candidate's local re-rank had no\neffect.",
+          "type": "boolean"
+        },
         "priority": {
           "type": "integer",
           "format": "int64"
+        },
+        "label": {
+          "description": "The source's display name, from its subscription.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "locked": {
           "type": "boolean"
@@ -333,6 +370,86 @@
           "required": [
             "outcome",
             "by"
+          ]
+        }
+      ]
+    },
+    "RankOrigin": {
+      "description": "Where a layer's rank, or a source's placement, came from.",
+      "oneOf": [
+        {
+          "description": "Loadout's built-in ranks.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "const": "default"
+            }
+          },
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "description": "Suggested by a source's `LOADOUT.md` (`layers:`).",
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string",
+              "const": "source"
+            }
+          },
+          "required": [
+            "from",
+            "source"
+          ]
+        },
+        {
+          "description": "The company config's `company.layers`.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "const": "company_config"
+            }
+          },
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "description": "`[layers]` in your `config.toml`.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "const": "config"
+            }
+          },
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "description": "A subscription's `layer` / `rank`: your `[[source]]` in\n`config.toml`, or (with `upstream_of`) the `upstream:` entry of the\nsource that pulled it in.",
+          "type": "object",
+          "properties": {
+            "upstream_of": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "from": {
+              "type": "string",
+              "const": "subscription"
+            }
+          },
+          "required": [
+            "from"
           ]
         }
       ]

@@ -159,7 +159,7 @@ pub fn run(ctx: &Ctx, args: InfoArgs) -> Result<u8> {
             &ctx.paths.repos_dir(),
             &normalize_url(&src.url),
         ));
-        let text = std::fs::read_to_string(dir.join(MANIFEST_FILE))
+        let text = crate::scan::manifest_text(&dir, &src.url)
             .with_context(|| format!("reading {MANIFEST_FILE} of {}", src.name))?;
         let doc = ManifestDoc::parse(&text)?;
         let body = Document::split(&text)?.body.to_owned();

@@ -418,6 +418,22 @@ impl ConfigDoc {
         }
     }
 
+    /// Adds `entry` (a source name or URL) to `[policy] auto_apply`.
+    /// Returns `false` if it's already there.
+    pub fn add_auto_apply(&mut self, entry: &str) -> bool {
+        if self.config().policy.auto_apply.iter().any(|a| a == entry) {
+            return false;
+        }
+        let policy = self.table("policy");
+        match policy.get_mut("auto_apply").and_then(Item::as_array_mut) {
+            Some(a) => a.push(entry),
+            None => {
+                policy.insert("auto_apply", value(string_array(&[entry.to_owned()])));
+            }
+        }
+        true
+    }
+
     /// Sets `[layers] <name> = <rank>`.
     pub fn set_layer(&mut self, name: &str, rank: i64) {
         self.table("layers").insert(name, value(rank));

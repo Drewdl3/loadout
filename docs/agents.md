@@ -109,6 +109,20 @@ Other directories you may add: `agents/<name>.md` (subagents),
 `plugins/<name>/PLUGIN.md` (Claude Code plugins) and
 `templates/<name>/SKILL.md` (templates, never installed).
 
+A repo with no `LOADOUT.md` at its root can still be subscribed: it's
+read as a plain skills repo, named after its URL (`acme/skills` →
+`acme-skills`), at the `user` layer, with every folder holding a `SKILL.md`
+(at any depth, skipping hidden folders and `node_modules`) as a skill named
+after its folder. The first of two folders with the same name wins.
+
+`lo skills` lists every skill in the AI tools' folders (`--json`: see
+`schemas/cli/skills.schema.json`), and `lo skills manage` brings them under
+Loadout: it follows the repo an installer recorded (`npx skills`' lock
+file, `~/.agents/.skill-lock.json` or a project's `skills-lock.json`), or
+copies the skill into `local-skills`, a source kept in Loadout's data
+folder (`<data>/local`) whose edits `lo export-source local-skills` commits
+in place and installs, with no pull request.
+
 Skills that already exist somewhere (in `~/.claude/skills`, a project's
 `.claude/skills`, a folder) can be copied in rather than rewritten:
 `lo adopt` lists the ones Loadout doesn't manage, and

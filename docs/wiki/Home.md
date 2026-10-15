@@ -48,6 +48,7 @@ flowchart BT
 - [How layers work](How-Layers-Work.md): who wins, locks, required items, "Why?"
 - [Using the web UI](Using-the-Web-UI.md): a tour of every page, including **Your layers**
 - [Using the terminal](Using-the-Terminal.md): the CLI and `lo tui`
+- [Managing your skills](Managing-Your-Skills.md): every skill on your computer, duplicates, following skills repos
 - [Sharing skills](Sharing-Skills.md): write, adopt, templates, pull requests
 - [Growing across your org](Growing-Across-Your-Org.md): connecting team sources, your own layers, company configs
 - [Tool connections and secrets](Tool-Connections-and-Secrets.md): MCP servers

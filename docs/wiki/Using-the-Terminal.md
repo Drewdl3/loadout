@@ -84,6 +84,9 @@ lo schedule enable             # sync every hour using the OS scheduler
 lo export                      # your exact setup as a short code (lo1_…)
 lo import lo1_… --dry-run      # see what it would change first
 lo import lo1_…                # reproduce someone's setup
+lo skills                      # every skill on this computer, and what to fix
+lo skills manage --all         # Loadout takes care of them: one copy, every tool
+lo skills unmanage tdd         # put your original back
 lo adopt                       # list skills in your AI tools you could share
 lo adopt --into payments-skills --all --tag imported --author "Ada Lovelace"
 lo adopt --restore write-spec   # put back an original that sync moved aside
@@ -97,8 +100,9 @@ lo export-source payments-skills -m "Improve write-spec"   # open a pull request
 lo tui
 ```
 
-A full-screen browser for the catalog (search and filters), the sources
-tree, templates, your groups and pending updates. Toggle, prefer or join with
+A full-screen browser for the catalog (search and filters), the skills on
+your computer (**Computer**: `m` manage, `c` copy instead, `u` stop
+managing), the sources tree, templates, your groups and pending updates. Toggle, prefer or join with
 one key, with the `why` explanation alongside. Press `?` to see the keys.
 
 ## For scripts and AI agents

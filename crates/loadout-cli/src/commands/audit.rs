@@ -124,7 +124,11 @@ pub fn run(ctx: &Ctx, args: AuditArgs) -> Result<u8> {
         }
         // A repo's scan includes its nested sources; keep this source's items.
         let dir = loadout_git::repo_dir(&ctx.paths.repos_dir(), &normalize_url(&src.url));
-        match scan_source(&dir) {
+        let overrides = crate::scan::Overrides {
+            url: Some(src.url.clone()),
+            ..Default::default()
+        };
+        match crate::scan::scan_source_with(&dir, &overrides) {
             Ok(scanned) => {
                 let items: Vec<_> = scanned
                     .items

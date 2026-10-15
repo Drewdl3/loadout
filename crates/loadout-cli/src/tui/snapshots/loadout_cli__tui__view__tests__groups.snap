@@ -1,9 +1,8 @@
 ---
 source: crates/loadout-cli/src/tui/view.rs
-assertion_line: 778
 expression: screen(&a)
 ---
-" ◆ Loadout  1 Catalog │ 2 Sources │ 3 Templates │ 4 Groups │ 5 Status (1)                                     "
+" ◆ Loadout  1 Catalog │ 2 Computer │ 3 Sources │ 4 Templates │ 5 Groups │ 6 Status (1)                        "
 "                                                                                                              "
 "╭ Your groups ───────────────────────────────────────────────────────────────────────────────────────────────╮"
 "│▶ product:billing                            ○ not a member   rule                                    join  │"

@@ -34,6 +34,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+- Web UI changes: run the browser tests (`e2e/`, see its README) and look
+  at the screenshots they save in `e2e/screenshots/`, at desktop and phone
+  width.
 - CLI JSON schemas are generated: `UPDATE_SCHEMAS=1 cargo test -p loadout-cli --test schemas`.
 - Snapshots use `insta`: review every changed `.snap` before accepting it.
 

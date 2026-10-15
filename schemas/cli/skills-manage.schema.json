@@ -1,0 +1,180 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/skills-manage.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SkillsChangeReport",
+  "description": "`lo skills manage|unmanage --json`.",
+  "type": "object",
+  "properties": {
+    "managed": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Managed"
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SkippedSkill"
+      }
+    },
+    "restored": {
+      "description": "`unmanage`: the originals put back.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Restored"
+      }
+    },
+    "handed_over": {
+      "description": "Originals the sync moved aside.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/HandedOver"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "managed",
+    "skipped",
+    "restored",
+    "handed_over",
+    "warnings"
+  ],
+  "$defs": {
+    "Managed": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "how": {
+          "$ref": "#/$defs/How"
+        },
+        "source": {
+          "description": "The source it now comes from.",
+          "type": "string"
+        },
+        "url": {
+          "description": "The followed repo.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "originals": {
+          "description": "The originals that move aside.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "renamed_from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "how",
+        "source",
+        "originals"
+      ]
+    },
+    "How": {
+      "oneOf": [
+        {
+          "description": "Its repo is followed as a source.",
+          "type": "string",
+          "const": "followed"
+        },
+        {
+          "description": "Copied into your local source.",
+          "type": "string",
+          "const": "copied"
+        }
+      ]
+    },
+    "SkippedSkill": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "reason"
+      ]
+    },
+    "Restored": {
+      "description": "An original that `lo adopt --restore` put back.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "The folder it was put back in.",
+          "type": "string"
+        },
+        "links": {
+          "description": "Links re-created.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "links"
+      ]
+    },
+    "HandedOver": {
+      "description": "An original moved aside by `lo sync` (or that would be, with\n`--dry-run`).",
+      "type": "object",
+      "properties": {
+        "item": {
+          "description": "`skill/<name>`.",
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "from": {
+          "description": "The original folder.",
+          "type": "string"
+        },
+        "backup": {
+          "description": "Where it was moved.",
+          "type": "string"
+        },
+        "links": {
+          "description": "Links to it, in other tools' folders, that were removed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "item",
+        "source",
+        "from",
+        "backup",
+        "links"
+      ]
+    }
+  }
+}

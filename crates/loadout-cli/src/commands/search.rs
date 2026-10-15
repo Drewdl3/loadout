@@ -138,6 +138,7 @@ pub fn unsubscribed_company_config_sources(
                 Overrides {
                     layer: Some(group.layer.clone()),
                     group: Some(group.name.clone()),
+                    url: Some(src.clone()),
                 },
             ));
         }

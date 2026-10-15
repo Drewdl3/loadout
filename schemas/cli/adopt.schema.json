@@ -36,15 +36,11 @@
       "type": "boolean"
     },
     "restored": {
-      "description": "`--restore`: the original put back.",
-      "anyOf": [
-        {
-          "$ref": "#/$defs/Restored"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "description": "`--restore`: the originals put back.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Restored"
+      }
     },
     "warnings": {
       "type": "array",

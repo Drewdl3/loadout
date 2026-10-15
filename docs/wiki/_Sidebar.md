@@ -6,6 +6,7 @@
 - [How layers work](How-Layers-Work.md)
 - [Using the web UI](Using-the-Web-UI.md)
 - [Using the terminal](Using-the-Terminal.md)
+- [Managing your skills](Managing-Your-Skills.md)
 
 **Share and run it**
 - [Sharing skills](Sharing-Skills.md)

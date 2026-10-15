@@ -256,9 +256,20 @@ fn kind_of(ctx: &Ctx, git: &Git, url: &str) -> Result<InitKind> {
     let dir = loadout_git::repo_dir(&ctx.paths.data_dir.join("preview"), &normalize_url(url));
     git.sync_checkout(url, &dir, None)
         .with_context(|| format!("can't read {url}"))?;
-    let text = std::fs::read_to_string(dir.join(MANIFEST_FILE)).with_context(|| {
-        format!("{url} has no {MANIFEST_FILE}, so it isn't a Loadout source or company config")
-    })?;
+    let Ok(text) = std::fs::read_to_string(dir.join(MANIFEST_FILE)) else {
+        // A plain skills repo is followed like a source.
+        let overrides = crate::scan::Overrides {
+            url: Some(url.to_owned()),
+            ..Default::default()
+        };
+        let plain = crate::scan::scan_source_with(&dir, &overrides)?;
+        if plain.items.is_empty() {
+            bail!(
+                "{url} has no {MANIFEST_FILE} and no skills (folders with a SKILL.md), so there's nothing to follow"
+            );
+        }
+        return Ok(InitKind::Source);
+    };
     let doc = ManifestDoc::parse(&text).with_context(|| url.to_owned())?;
     Ok(if doc.manifest.company_config.is_some() {
         InitKind::CompanyConfig

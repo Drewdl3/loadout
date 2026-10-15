@@ -18,6 +18,7 @@ pub mod search;
 pub mod secrets;
 pub mod self_update;
 pub mod share;
+pub mod skills;
 pub mod source;
 pub mod subscribe;
 pub mod sync;

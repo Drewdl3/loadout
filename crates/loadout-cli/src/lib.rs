@@ -6,7 +6,9 @@ pub mod ctx;
 pub mod edit;
 pub mod engine;
 pub mod handover;
+pub mod inventory;
 pub mod layers;
+pub mod local;
 pub mod mcp;
 pub mod membership;
 pub mod paths;
@@ -117,6 +119,8 @@ enum Command {
     Template(commands::template::TemplateArgs),
     /// Copy skills you already have (in your AI tools, or a folder) into a source to share them.
     Adopt(commands::adopt::AdoptArgs),
+    /// Every skill on this computer: see them, manage them, fix duplicates.
+    Skills(commands::skills::SkillsArgs),
     /// Scaffold a new source repo (LOADOUT.md, an example skill, a CI audit).
     #[command(name = "new-source")]
     NewSource(commands::new_source::NewSourceArgs),
@@ -189,6 +193,7 @@ pub fn run() -> ExitCode {
         Command::Schedule(args) => commands::schedule::run(&ctx, args),
         Command::Template(args) => commands::template::run(&ctx, args),
         Command::Adopt(args) => commands::adopt::run(&ctx, args),
+        Command::Skills(args) => commands::skills::run(&ctx, args),
         Command::NewSource(args) => commands::new_source::run(&ctx, args),
         Command::SelfUpdate(args) => commands::self_update::run(&ctx, args),
         Command::Ui(args) => ui::run(&ctx, args),

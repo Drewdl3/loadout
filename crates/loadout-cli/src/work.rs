@@ -26,8 +26,11 @@ pub struct Work {
     pub dir: PathBuf,
 }
 
-/// `data/work/<blake3(url)[:16]>`.
+/// `data/work/<blake3(url)[:16]>`; the local source is edited in place.
 pub fn work_dir(ctx: &Ctx, url: &str) -> PathBuf {
+    if crate::local::is_local(&ctx.paths, url) {
+        return crate::local::dir(&ctx.paths);
+    }
     loadout_git::repo_dir(&ctx.paths.data_dir.join("work"), &normalize_url(url))
 }
 
@@ -41,6 +44,17 @@ pub fn open(ctx: &Ctx, git: &Git, name: &str) -> Result<Work> {
         bail!("no source named {name:?} (see `lo info` / `lo list`)");
     };
     let root = work_dir(ctx, &src.url);
+    let synced = src.dir_in(&loadout_git::repo_dir(
+        &ctx.paths.repos_dir(),
+        &normalize_url(&src.url),
+    ));
+    if !crate::local::is_local(&ctx.paths, &src.url) && !synced.join(MANIFEST_FILE).exists() {
+        // A plain skills repo: there's nowhere to send changes.
+        bail!(
+            "{name} is a skills repo you follow, not one you edit through Loadout; \
+             copy the skill to your own layer (Copy to another layer…) to change it"
+        );
+    }
     if !root.join(".git").exists() {
         std::fs::create_dir_all(root.parent().expect("parent"))?;
         git.run(

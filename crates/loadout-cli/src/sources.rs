@@ -469,6 +469,7 @@ pub fn load_one(
     let overrides = Overrides {
         layer: sub.layer.clone(),
         group: sub.group.clone(),
+        url: Some(sub.url.clone()),
     };
     let fetched =
         |commit: String, cached: bool, scanned: ScannedSource, from: Option<String>| Fetched {

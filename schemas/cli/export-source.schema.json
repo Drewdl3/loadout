@@ -37,6 +37,10 @@
         }
       ]
     },
+    "applied": {
+      "description": "The local source: the edits were committed in place and installed\n(no branch, push or pull request).",
+      "type": "boolean"
+    },
     "warnings": {
       "type": "array",
       "items": {

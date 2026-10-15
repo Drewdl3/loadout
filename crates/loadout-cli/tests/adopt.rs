@@ -283,7 +283,7 @@ fn sync_moves_the_original_aside_once_the_source_ships_it() {
     s.ok(&["disable", "team-skills:skill/my-debugging"]);
     s.ok(&["sync"]);
     let r = s.json(&["adopt", "--restore", "my-debugging"]);
-    assert_eq!(r["restored"]["path"], original.display().to_string());
+    assert_eq!(r["restored"][0]["path"], original.display().to_string());
     assert!(original.join("refs/notes.md").is_file() && !original.is_symlink());
     assert!(pi.join("my-debugging/SKILL.md").is_file());
     assert!(!backup.exists());

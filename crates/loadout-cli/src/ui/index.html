@@ -25,7 +25,9 @@
   body { font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
   code, .mono { font-family:var(--mono); font-size:12.5px; }
   a { color:var(--accent); }
-  .app { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
+  /* minmax(0, 1fr): the page column may shrink below its widest content
+     (a table, a long path), which then scrolls or wraps on its own. */
+  .app { display:grid; grid-template-columns:220px minmax(0, 1fr); min-height:100vh; }
   aside { border-right:1px solid var(--line); padding:18px 12px; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:4px; background:var(--sunken); }
   .brand { display:flex; align-items:center; gap:8px; font-weight:650; font-size:15px; padding:2px 8px 14px; }
   .brand .logo { width:24px; height:24px; border-radius:7px; background:var(--accent); color:var(--accent-fg); display:grid; place-items:center; font-size:13px; font-weight:700; }
@@ -46,6 +48,9 @@
   .tile .n { font-size:26px; font-weight:650; letter-spacing:-.02em; }
   .tile .l { color:var(--muted); font-size:12.5px; }
   table { width:100%; border-collapse:collapse; }
+  /* A wide table scrolls on its own instead of the whole page. */
+  .table-wrap { overflow-x:auto; max-width:100%; }
+  td.mono { overflow-wrap:anywhere; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
   tr:last-child td { border-bottom:0; }
   th { color:var(--muted); font-weight:550; font-size:12px; }
@@ -191,7 +196,7 @@
   #toast { position:fixed; bottom:18px; right:18px; max-width:520px; padding:11px 15px; border-radius:9px; background:var(--panel); border:1px solid var(--line); box-shadow:var(--shadow); display:none; white-space:pre-wrap; z-index:30; }
   #toast.bad { border-color:var(--bad); color:var(--bad); }
   @media (max-width: 860px) {
-    .app { grid-template-columns:1fr; }
+    .app { grid-template-columns:minmax(0, 1fr); }
     aside { position:static; height:auto; flex-direction:row; flex-wrap:wrap; padding:10px 12px; border-right:0; border-bottom:1px solid var(--line); }
     .brand { padding:4px 8px; width:100%; }
     nav { display:flex; flex-wrap:wrap; gap:2px; }
@@ -233,6 +238,7 @@ const tabs = [
   ["Start", "Start here", "", "A guided tour and your setup checklist"],
   ["Overview", "Home", "Use", "Your setup at a glance"],
   ["Catalog", "Browse skills", "Use", "Everything you can get, with filters"],
+  ["Computer", "My computer", "Use", "Every skill on this computer, whether Loadout installed it or not"],
   ["Layers", "Your layers", "Use", "Which group each skill comes from, and which version wins"],
   ["Targets", "AI tools", "Use", "The AI tools Loadout installs into"],
   ["Review", "Updates", "Use", "Changes waiting for your OK"],
@@ -281,7 +287,7 @@ async function run(args, label, refresh = true) {
     return out;
   } catch (e) { toast(e.message, true); throw e; }
 }
-const tbl = (head, rows) => el("table", {}, el("thead", {}, el("tr", {}, head.map(h => el("th", {}, h)))), el("tbody", {}, rows));
+const tbl = (head, rows) => el("div", { class: "table-wrap" }, el("table", {}, el("thead", {}, el("tr", {}, head.map(h => el("th", {}, h)))), el("tbody", {}, rows)));
 const short = s => (s || "").slice(0, 8);
 // A page's heading plus its "About this page" explainer (HELP[id]).
 function pageHead(id, sub, ...right) {
@@ -327,6 +333,9 @@ const HELP = {
     "When two layers share something with the same name, the one lower down (closer to you) wins and the other is marked Replaced, unless a layer above has locked it.",
     "You decide the order: drag a layer in Ranks, or type its rank. Locks stay where their sources put them, whatever you change.",
     "Click Why? on anything to see every version and the rule that picked the winner."],
+  Computer: ["Every skill your AI tools can see on this computer: the ones Loadout installed, and the ones you or other installers (like npx skills) put there.",
+    "Manage a skill and Loadout installs it into every AI tool you use, keeps it up to date, and moves the old copies aside, so no tool has two. Skills that came from a Git repo are followed, so you keep getting its updates; others are copied into your own local skills, which you can edit here.",
+    "Changed your mind? Stop managing puts your originals back."],
   Targets: ["The AI apps Loadout can set up on this computer. Turn on the ones you use.",
     "Link (recommended) points each app at Loadout's copy, so updates show up straight away. Copy puts separate files in each app, for apps that don't follow links."],
   Review: ["Some groups ask you to look over their updates before they reach your AI tools. Read what changed, then approve it.",
@@ -701,6 +710,109 @@ const views = {
     await load();
   },
 
+  async Computer(m, opts = {}) {
+    const q = opts.in ? "?in=" + encodeURIComponent(opts.in) : "";
+    const [inv, tg] = await Promise.all([api("/api/skills" + q), api("/api/targets").catch(() => ({ targets: [] }))]);
+    const toolName = id => ((tg.targets || []).find(t => t.id === id) || {}).display || id;
+    const skills = inv.skills || [];
+    const tilde = p => inv.home && p.startsWith(inv.home + "/") ? "~" + p.slice(inv.home.length) : p;
+    const others = s => s.copies.filter(c => !c.managed && c.scope === "global");
+    const differs = s => new Set(others(s).map(c => c.content_hash)).size > 1;
+    const unmanaged = skills.filter(s => others(s).length);
+    // What "Manage" can do in one click: copies that differ need a choice first.
+    const ready = unmanaged.filter(s => !differs(s));
+    const attention = skills.filter(s => s.issues.length);
+    const manage = async (body, what) => {
+      try {
+        const r = await api("/api/skills-manage", body);
+        const done = r.managed.map(x => x.name);
+        const msg = [done.length ? `Now managing ${done.join(", ")}.` : "", ...r.skipped.map(x => `${x.name}: ${x.reason}`), ...(r.warnings || [])].filter(Boolean).join("\n");
+        toast(msg || what, !done.length);
+        show("Computer", opts, true);
+      } catch (e) { toast(e.message, true); }
+    };
+    const unmanage = async name => {
+      if (!confirm(`Stop managing ${name}? Loadout removes its copy and puts your original back.`)) return;
+      try { await api("/api/skills-unmanage", { name }); toast(`Put your ${name} back`); show("Computer", opts, true); }
+      catch (e) { toast(e.message, true); }
+    };
+    m.append(pageHead("Computer", "Every skill your AI tools can see, whether Loadout installed it or not",
+      ready.length ? el("button", { class: "btn primary", title: "Follow or copy every skill Loadout doesn't manage yet", onclick: () => manage({ names: ready.map(s => s.name) }) }, `Manage all ${ready.length}`) : null));
+    m.append(el("div", { class: "tiles" },
+      el("div", { class: "tile" }, el("div", { class: "n" }, skills.length), el("div", { class: "l" }, "skills on this computer")),
+      el("div", { class: "tile" }, el("div", { class: "n" }, skills.filter(s => s.state === "managed").length), el("div", { class: "l" }, "managed by Loadout")),
+      el("div", { class: "tile" }, el("div", { class: "n" + (unmanaged.length ? " warn" : "") }, unmanaged.length), el("div", { class: "l" }, "not managed")),
+      el("div", { class: "tile" }, el("div", { class: "n" + (attention.length ? " warn" : "") }, attention.length), el("div", { class: "l" }, "need attention"))));
+
+    // Skills an installer got from one repo: follow it in one go.
+    const repos = {};
+    for (const s of ready) {
+      const o = s.copies.map(c => c.origin).find(o => o && o.url);
+      if (o) (repos[o.url] = repos[o.url] || { o, names: [] }).names.push(s.name);
+    }
+    for (const { o, names } of Object.values(repos)) {
+      m.append(el("div", { class: "card" },
+        el("div", { class: "row" }, el("b", {}, `${names.length} skill${names.length === 1 ? "" : "s"} from ${o.source}`), el("span", { class: "chip" }, "installed with " + o.installer), el("span", { class: "grow" }),
+          el("button", { class: "btn primary", title: "Add the repo as a source, with just these skills on: you keep getting its updates", onclick: () => manage({ names }) }, `Follow ${o.source}`),
+          el("button", { class: "btn", title: "Copy them into your own local skills instead: no updates from the repo", onclick: () => manage({ names, copy: true }) }, "Copy instead")),
+        el("div", { class: "muted", style: "margin-top:6px" }, names.join(", "))));
+    }
+
+    const folder = el("input", { type: "text", class: "grow", placeholder: "Also look in a project folder, e.g. ~/work/app", value: opts.in || "", "aria-label": "Project folder" });
+    const look = () => show("Computer", { ...opts, in: folder.value.trim() || undefined });
+    folder.onkeydown = e => { if (e.key === "Enter") look(); };
+    const filters = [["all", "All"], ["attention", "Needs attention"], ["unmanaged", "Not managed"], ["managed", "Managed"]];
+    let filter = pref.get("computer.filter") || "all";
+    const listEl = el("div");
+    const chips = el("div", { class: "row", role: "group", "aria-label": "Show" });
+    const render = () => {
+      chips.replaceChildren(...filters.map(([k, l]) => el("button", { class: "btn" + (k === filter ? " primary" : ""), "aria-pressed": k === filter ? "true" : "false", onclick: () => { filter = k; pref.set("computer.filter", k); render(); } }, l)));
+      const shown = skills.filter(s => filter === "all" || (filter === "attention" ? s.issues.length : filter === "unmanaged" ? unmanaged.includes(s) : s.state === "managed"));
+      listEl.replaceChildren(shown.length ? el("div", {}, shown.map(skillRow)) : el("div", { class: "empty" }, filter === "attention" ? "Nothing needs attention." : "No skills here."));
+    };
+    const issueText = i => i.kind === "missing" ? `Not in ${i.tools.map(toolName).join(", ")}. Manage it to install it there too.`
+      : i.kind === "copies" ? (i.differ ? `${i.count} copies on this computer, and they're not the same.` : `${i.count} identical copies on this computer.`)
+      : i.kind === "shadowed" ? `${i.tools.map(toolName).join(", ")} see${i.tools.length === 1 ? "s" : ""} more than one copy.`
+      : i.kind === "blocked" ? `Your own copy is in the way of ${i.item} in ${i.tools.map(toolName).join(", ")}.` : i.kind;
+    const stateLabel = s => ({ managed: ["enabled", "managed"], "partly-managed": ["shadowed", "managed, with other copies"], adopted: ["not-for-you", "adopted, waiting for its source"], unmanaged: ["disabled", "not managed"] })[s.state];
+    function skillRow(s) {
+      const [cls, label] = stateLabel(s);
+      const tools = [...new Set(s.copies.flatMap(c => c.seen_by.map(v => v.tool)))];
+      const origin = s.copies.map(c => c.origin).find(Boolean);
+      const local = s.item && s.item.startsWith("local-skills:");
+      const globalOthers = others(s);
+      const differ = differs(s);
+      const actions = [];
+      if (globalOthers.length && !differ) {
+        actions.push(el("button", { class: "btn primary", title: origin && origin.url ? `Follow ${origin.source} for updates` : "Copy it into your local skills and install it everywhere", onclick: () => manage({ names: [s.name] }) }, "Manage"));
+        if (origin && origin.url) actions.push(el("button", { class: "btn ghost", onclick: () => manage({ names: [s.name], copy: true }) }, "Copy instead"));
+      }
+      if (local) actions.push(el("button", { class: "btn", onclick: () => editItem("local-skills", "skill/" + s.name) }, "Edit"));
+      if (s.handed_over) actions.push(el("button", { class: "btn ghost", title: "Remove Loadout's copy and put your original back", onclick: () => unmanage(s.name) }, "Stop managing"));
+      else if (s.item && !local) actions.push(el("button", { class: "btn ghost", title: "Remove it from your AI tools (you can turn it back on in Browse skills)", onclick: () => run(["disable", s.item], "Turned off " + s.name) }, "Turn off"));
+      const copies = el("details", { style: "margin-top:6px" }, el("summary", { class: "muted" }, s.copies.length === 1 ? "Where it is" : `${s.copies.length} copies`),
+        s.copies.map(c => el("div", { style: "padding:6px 0;border-top:1px solid var(--line)" },
+          el("div", { class: "row" }, el("span", { class: "mono", style: "overflow-wrap:anywhere", title: c.path }, tilde(c.path)),
+            c.managed ? el("span", { class: "pill enabled" }, "Loadout's") : el("span", { class: "chip" }, c.scope === "project" ? "in a project" : "yours"),
+            differ && !c.managed && c.scope === "global" ? el("button", { class: "btn ghost", title: "Keep this copy, retire the others", onclick: () => manage({ names: [s.name], path: c.path }) }, "Keep this one") : null),
+          el("div", { class: "faint", style: "font-size:12px" }, "Seen by ", c.seen_by.map(v => toolName(v.tool) + (v.link ? " (link)" : "")).join(", ")),
+          c.adopted_into ? el("div", { class: "faint", style: "font-size:12px" }, `Adopted into ${c.adopted_into}`) : null)));
+      return el("div", { class: "card", "data-skill": s.name },
+        el("div", { class: "row" }, el("b", { class: "mono" }, s.name), el("span", { class: "pill " + cls }, label),
+          origin ? el("span", { class: "chip", title: `${origin.installer} recorded where it came from` }, "from " + origin.source) : null,
+          s.item ? el("span", { class: "chip" }, s.item.split(":")[0] === "local-skills" ? "your local skills" : "via " + s.item.split(":")[0]) : null,
+          el("span", { class: "grow" }), actions),
+        s.description ? el("div", { class: "muted" }, s.description) : null,
+        el("div", {}, tools.map(t => el("span", { class: "chip" }, toolName(t)))),
+        s.issues.map(i => el("div", { class: "warn", style: "font-size:13px;margin-top:4px" }, issueText(i))),
+        differ && globalOthers.length ? el("div", { class: "muted", style: "font-size:13px" }, "Pick the copy to keep below, then Loadout installs it everywhere.") : null,
+        copies);
+    }
+    m.append(el("div", { class: "card" }, el("div", { class: "row" }, folder, el("button", { class: "btn", onclick: look }, "Look"))),
+      el("div", { style: "margin:10px 0" }, chips), listEl);
+    render();
+  },
+
   async Layers(m) {
     const state = views.Layers.state || (views.Layers.state = { all: false, kind: "", mine: false });
     m.append(pageHead("Layers", "Which group each skill comes from, from the broadest down to you", syncBtn()));
@@ -1037,10 +1149,15 @@ const views = {
 async function exportPr(source, message) {
   try {
     const r = await api("/api/export", { source, message: message || "Update agent configuration" });
+    if (r.applied) { toast("Saved and installed in your AI tools" + ((r.warnings || []).length ? "\n" + r.warnings.join("\n") : "")); return r; }
     toast(r.pull_request ? `Pull request #${r.pull_request.number}: ${r.pull_request.url}` : `Pushed ${r.branch}` + ((r.warnings || []).length ? "\n" + r.warnings.join("\n") : ""));
     return r;
   } catch (e) { toast(e.message, true); }
 }
+
+// Your local skills (`lo skills`): saved and installed at once, no pull request.
+const LOCAL = "local-skills";
+const shareLabel = source => source === LOCAL ? "Save & install" : "Open pull request";
 
 // Saved in working copies but not proposed yet, per source.
 const CHANGES = { added: ["enabled", "new"], modified: ["shadowed", "changed"], removed: ["not-for-you", "removed"] };
@@ -1062,7 +1179,7 @@ function draftsCard(drafts) {
           ...(d.items || []).map(i => row(i.key, i.change, i.change === "removed" ? null : () => editItem(d.source, i.key))),
           ...(d.templates || []).map(t => row("template/" + t.name, t.change, null)),
           ...(d.other || []).map(f => row(f.path, f.change, null)),
-          el("div", { class: "row", style: "margin-top:6px" }, msg, el("button", { class: "btn primary", onclick: send }, "Open pull request"))]);
+          el("div", { class: "row", style: "margin-top:6px" }, msg, el("button", { class: "btn primary", onclick: send }, shareLabel(d.source)))]);
     }));
 }
 
@@ -1125,9 +1242,9 @@ async function editItem(source, key) {
   const saved = path => {
     const msg = el("input", { type: "text", class: "grow", value: `Update ${key}`, "aria-label": "Pull request title" });
     result.replaceChildren(el("div", { class: "card", style: "margin-top:14px" },
-      el("div", { class: "ok" }, `Saved ${path} in your working copy of ${source}.`),
-      el("div", { class: "muted" }, "Nothing is shared until the pull request is merged."),
-      el("div", { class: "row", style: "margin-top:8px" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(source, msg.value) }, "Open pull request"))));
+      el("div", { class: "ok" }, source === LOCAL ? "Saved to your local skills." : `Saved ${path} in your working copy of ${source}.`),
+      el("div", { class: "muted" }, source === LOCAL ? "Your AI tools get it when you install it." : "Nothing is shared until the pull request is merged."),
+      el("div", { class: "row", style: "margin-top:8px" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(source, msg.value) }, shareLabel(source)))));
   };
   const reload = async () => {
     const n = await api(`/api/source-item?source=${encodeURIComponent(source)}&key=${encodeURIComponent(key)}`);

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use loadout_cli::commands::{
     adopt, audit, doctor, export_source, info, init, layers, list, new_source, profile, project,
-    review, schedule, search, secrets, share, source, subscribe, targets, template, why,
+    review, schedule, search, secrets, share, skills, source, subscribe, targets, template, why,
 };
 use loadout_cli::ctx::ErrorReport;
 use loadout_cli::engine::ApplyReport;
@@ -59,6 +59,10 @@ fn cli_schemas_are_up_to_date() {
     check::<template::TemplateShowReport>("template-show", &mut stale);
     check::<template::TemplateUseReport>("template-use", &mut stale);
     check::<adopt::AdoptReport>("adopt", &mut stale);
+    check::<loadout_cli::inventory::Inventory>("skills", &mut stale);
+    for change in ["skills-manage", "skills-unmanage"] {
+        check::<skills::SkillsChangeReport>(change, &mut stale);
+    }
     check::<project::ProjectInitReport>("init-project", &mut stale);
     check::<profile::ProfileReport>("profile", &mut stale);
     for change in ["profile-refresh", "profile-set", "join", "leave"] {

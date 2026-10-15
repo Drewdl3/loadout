@@ -226,6 +226,27 @@ impl Ui<'_> {
                 Some(p) if !p.trim().is_empty() => self.loadout(&["adopt", p.trim()]),
                 _ => self.loadout(&["adopt"]),
             },
+            (Method::Get, "/api/skills") => match get("in") {
+                Some(p) if p.starts_with('-') => json_reply(400, &json!({"error": "bad folder"})),
+                Some(p) if !p.trim().is_empty() => {
+                    self.loadout(&["skills", "list", "--in", p.trim()])
+                }
+                _ => self.loadout(&["skills", "list"]),
+            },
+            (Method::Post, "/api/skills-manage") => match read_json(req) {
+                Ok(body) => self.manage_skills(&body),
+                Err(e) => json_reply(400, &json!({ "error": e })),
+            },
+            (Method::Post, "/api/skills-unmanage") => match read_json(req) {
+                Ok(body) => match body["name"]
+                    .as_str()
+                    .filter(|n| !n.is_empty() && !n.starts_with('-'))
+                {
+                    Some(n) => self.loadout(&["skills", "unmanage", n]),
+                    None => json_reply(400, &json!({"error": "\"name\" required"})),
+                },
+                Err(e) => json_reply(400, &json!({ "error": e })),
+            },
             (Method::Post, "/api/adopt") => match read_json(req) {
                 Ok(body) => self.adopt(&body),
                 Err(e) => json_reply(400, &json!({"error": e})),
@@ -423,6 +444,37 @@ impl Ui<'_> {
         };
         if let Some(e) = &edits {
             args.extend(["--edits", e]);
+        }
+        self.loadout(&args)
+    }
+
+    /// `POST /api/skills-manage {names: [...] | all: true, copy?, path?}`.
+    fn manage_skills(&self, body: &Value) -> Reply {
+        let ok = |v: &&str| !v.is_empty() && !v.starts_with('-');
+        let names: Vec<&str> = body["names"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let all = body["all"].as_bool() == Some(true);
+        if !names.iter().all(ok) || (names.is_empty() != all) {
+            return json_reply(
+                400,
+                &json!({"error": "\"names\": [...] or \"all\": true required"}),
+            );
+        }
+        let mut args = vec!["skills", "manage"];
+        if all {
+            args.push("--all");
+        }
+        args.extend(&names);
+        if body["copy"].as_bool() == Some(true) {
+            args.push("--copy");
+        }
+        if let Some(p) = body["path"].as_str().filter(|p| !p.is_empty()) {
+            if p.starts_with('-') {
+                return json_reply(400, &json!({"error": "bad path"}));
+            }
+            args.extend(["--path", p]);
         }
         self.loadout(&args)
     }

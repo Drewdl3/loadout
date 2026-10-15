@@ -76,6 +76,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     match app.tab {
         Tab::Catalog => catalog(f, app, body),
+        Tab::Computer => computer(f, app, body),
         Tab::Sources => sources(f, app, body),
         Tab::Templates => templates(f, app, body),
         Tab::Groups => groups(f, app, body),
@@ -84,6 +85,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     let hints = match app.tab {
         Tab::Catalog => "/ search  s k o r t filter  c clear  a all groups  space toggle  w why",
+        Tab::Computer => "m manage  c copy instead  u stop managing",
         Tab::Sources => "n preview+add  u unsubscribe  enter items",
         Tab::Templates => "enter use  x open pull request",
         Tab::Groups => "enter join/leave",
@@ -515,6 +517,119 @@ fn templates(f: &mut Frame, app: &App, area: Rect) {
     );
 }
 
+/// One line about an inventory issue (as `lo skills` prints it).
+fn issue(i: &Value) -> String {
+    let tools = |v: &Value| {
+        v.as_array()
+            .map(|a| a.iter().map(s).collect::<Vec<_>>().join(", "))
+            .unwrap_or_default()
+    };
+    match s(&i["kind"]) {
+        "missing" => format!("not in {}", tools(&i["tools"])),
+        "shadowed" => format!("{} see(s) more than one copy", tools(&i["tools"])),
+        "copies" if i["differ"] == true => format!("{} copies, and they differ", i["count"]),
+        "copies" => format!("{} identical copies", i["count"]),
+        "blocked" => format!(
+            "your own copy blocks {} in {}",
+            s(&i["item"]),
+            tools(&i["tools"])
+        ),
+        other => other.to_owned(),
+    }
+}
+
+fn computer(f: &mut Frame, app: &App, area: Rect) {
+    let [list, detail] = Layout::vertical([Constraint::Min(5), Constraint::Length(8)]).areas(area);
+    let rows: Vec<Row> = app
+        .skills
+        .iter()
+        .map(|sk| {
+            let (state, color) = match s(&sk["state"]) {
+                "managed" => ("● managed", Color::Green),
+                "partly-managed" => ("◐ managed, other copies", Color::Yellow),
+                "adopted" => ("◌ adopted", Color::Blue),
+                _ => ("○ not managed", Color::DarkGray),
+            };
+            let mut tools: Vec<&str> = sk["copies"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|c| c["seen_by"].as_array().into_iter().flatten())
+                .map(|v| s(&v["tool"]))
+                .collect();
+            tools.sort_unstable();
+            tools.dedup();
+            let first_issue = sk["issues"].as_array().and_then(|i| i.first()).map(issue);
+            Row::new(vec![
+                Cell::from(Span::styled(s(&sk["name"]).to_owned(), Style::new().bold())),
+                Cell::from(Span::styled(state, Style::new().fg(color))),
+                Cell::from(Span::styled(tools.join(", "), Style::new().fg(Color::Gray))),
+                Cell::from(Span::styled(
+                    first_issue.unwrap_or_default(),
+                    Style::new().fg(Color::Yellow),
+                )),
+            ])
+        })
+        .collect();
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Percentage(25),
+            Constraint::Length(24),
+            Constraint::Percentage(25),
+            Constraint::Min(10),
+        ],
+    )
+    .block(block("Skills on this computer"))
+    .row_highlight_style(
+        Style::new()
+            .bg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    )
+    .highlight_symbol("▶ ");
+    let mut st =
+        TableState::default().with_selected((!app.skills.is_empty()).then_some(app.skill_sel));
+    f.render_stateful_widget(table, list, &mut st);
+
+    let mut lines = Vec::new();
+    if let Some(sk) = app.skills.get(app.skill_sel) {
+        if let Some(d) = sk["description"].as_str() {
+            lines.push(Line::from(Span::raw(d.to_owned())));
+        }
+        if let Some(item) = sk["item"].as_str() {
+            lines.push(Line::from(Span::styled(
+                format!("Loadout installs {item}"),
+                Style::new().fg(Color::Green),
+            )));
+        }
+        for c in sk["copies"].as_array().into_iter().flatten() {
+            let whose = if c["managed"] == true {
+                "Loadout's"
+            } else {
+                "yours"
+            };
+            let origin = c["origin"]["source"]
+                .as_str()
+                .map(|o| format!(", from {o}"))
+                .unwrap_or_default();
+            lines.push(Line::from(vec![
+                Span::styled(format!("{whose}{origin}: "), Style::new().fg(Color::Gray)),
+                Span::raw(s(&c["path"]).to_owned()),
+            ]));
+        }
+        for i in sk["issues"].as_array().into_iter().flatten() {
+            lines.push(Line::from(Span::styled(
+                format!("! {}", issue(i)),
+                Style::new().fg(Color::Yellow),
+            )));
+        }
+    }
+    f.render_widget(
+        Paragraph::new(Text::from(lines)).block(block("Details")),
+        detail,
+    );
+}
+
 fn groups(f: &mut Frame, app: &App, area: Rect) {
     let rows: Vec<Row> = app
         .groups
@@ -704,7 +819,7 @@ fn help(f: &mut Frame) {
     let area = popup(f.area(), 66, 18);
     f.render_widget(Clear, area);
     let rows = [
-        ("1-5, tab", "switch view"),
+        ("1-6, tab", "switch view"),
         ("↑ ↓ / j", "move"),
         ("/", "search (catalog)"),
         (
@@ -719,6 +834,7 @@ fn help(f: &mut Frame) {
         ),
         ("w / enter", "why this version (catalog)"),
         ("n", "preview a source, then y to subscribe (sources)"),
+        ("m / c / u", "manage, copy, stop managing (computer)"),
         ("enter", "use a template · join/leave a group · approve"),
         ("S", "sync now"),
         ("R", "refresh"),
@@ -762,6 +878,8 @@ mod tests {
         a.on_key(Key::Char('k'));
         insta::assert_snapshot!("catalog_filtered", screen(&a));
         a.on_key(Key::Char('2'));
+        insta::assert_snapshot!("computer", screen(&a));
+        a.on_key(Key::Char('3'));
         insta::assert_snapshot!("sources", screen(&a));
         a.on_key(Key::Char('n'));
         for c in "/r/team".chars() {
@@ -770,13 +888,13 @@ mod tests {
         a.on_key(Key::Enter);
         insta::assert_snapshot!("sources_preview", screen(&a));
         a.on_key(Key::Esc);
-        a.on_key(Key::Char('3'));
+        a.on_key(Key::Char('4'));
         a.on_key(Key::Enter);
         insta::assert_snapshot!("template_form", screen(&a));
         a.on_key(Key::Esc);
-        a.on_key(Key::Char('4'));
-        insta::assert_snapshot!("groups", screen(&a));
         a.on_key(Key::Char('5'));
+        insta::assert_snapshot!("groups", screen(&a));
+        a.on_key(Key::Char('6'));
         insta::assert_snapshot!("status", screen(&a));
         a.on_key(Key::Char('?'));
         insta::assert_snapshot!("help", screen(&a));

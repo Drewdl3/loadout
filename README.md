@@ -329,7 +329,10 @@ linked into each tool: symlinks, or junctions on Windows, or copies if you
 set `lo targets mode <id> copy`. MCP servers are merged into each tool's
 config file without touching your own entries, keeping a `.loadout.bak`.
 Loadout only ever touches entries it created. If you already have a skill
-with the same name, yours is left alone and reported by `lo doctor`.
+with the same name, yours is left alone and reported by `lo doctor`. The
+exception is a skill you shared with `lo adopt`: once its source ships it,
+`lo sync` moves your unchanged original (and other tools' links to it) to a
+backup and installs the shared version, so no tool sees it twice.
 
 | Tool | Skills | Subagents | MCP | Other |
 |---|---|---|---|---|
@@ -460,7 +463,7 @@ Exit codes: `0` ok, `1` error, `2` changes pending review, `3` audit blocked,
 |---|---|
 | `lo export [--qr] [--latest]` / `lo import <code> [--dry-run\|--yes] [--latest]` | Share your exact setup as a shortcode (`lo1_…`); never contains secrets. `--dry-run` shows what an import would change. The web UI's **Share setup** page does both. |
 | `lo template [list\|show <t>\|use <t> --into <source> --set k=v]` | Turn a template from a higher source into your own skill. |
-| `lo adopt [<path>...] [--into <source> \| --dir <path>] [--skill n]... [--all]` | Copy skills you already have (in your AI tools' skills folders, or a folder) into a source to share them; without `--into`/`--dir` it lists what it finds. In a terminal you pick from a list. |
+| `lo adopt [<path>...] [--into <source> \| --dir <path>] [--skill n[=new]]... [--all] [--tag t]... [--author a] [--mode m]` / `lo adopt --restore <name>` | Copy skills you already have (in your AI tools' skills folders, or a folder) into a source to share them; without `--into`/`--dir` it lists what it finds, marking ones already adopted or shipped. In a terminal you pick from a list. `n=new` renames, `--tag`/`--author`/`--mode` apply to every skill. Once the source ships them, `lo sync` moves the originals aside; `--restore` puts one back. |
 | `lo new-source [<dir>] [--layer s] [--group u] [--upstream url]... [--company-config]` | Scaffold a source (or company config) repo with an example skill, an `AGENTS.md` for AI agents and a CI audit workflow. |
 | `lo export-source <source> [-m msg]` | Commit edits made in a source's working clone to a `loadout/…` branch, push, open a PR. |
 | `lo tui` | Terminal UI. Catalog with search and filters (state, kind, source, role, tag), toggle/prefer/join with one key, `why` alongside; the sources tree with upstreams, preview then subscribe; templates; groups; pending reviews. `?` shows the keys. |
@@ -497,7 +500,8 @@ a broader layer's version, and which were replaced by one closer to you. Its
 Its **Create & edit** page has forms for a **new skill** and a **new
 template** (starters, the blanks to fill in, and a preview with example
 answers), and **Share skills you already have**, which copies skills you
-already use into a source. Any item can be **edited** with a form (only the
+already use into a source after a review step (rename, describe, tag, set
+the author, mode or roles, one by one or for all at once). Any item can be **edited** with a form (only the
 fields you change are rewritten) or as a whole file, and **copied to another
 layer**: promote a team skill to the org, or clone a company skill down to
 your team or yourself and make it your own. Items show their `author` and

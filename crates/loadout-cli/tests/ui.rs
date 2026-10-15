@@ -624,12 +624,35 @@ fn adopt_installed_skills_into_a_source() {
     let (_, item) = ui.get("/api/source-item?source=other-skills&key=skill/my-debugging");
     assert!(item["output"]["text"].as_str().unwrap().contains("Mine."));
 
+    // The review step: a new name and edited fields.
+    let odd = s.skills_dir().join("Odd_One");
+    std::fs::create_dir_all(&odd).unwrap();
+    std::fs::write(odd.join("SKILL.md"), skill("odd", "Odd.")).unwrap();
+    let (status, r) = ui.post(
+        "/api/adopt",
+        json!({"into": "other-skills", "skills": ["Odd_One"], "renames": {"Odd_One": "odd-one"},
+               "edits": {"odd-one": {"tags": ["imported"], "description": "Even. Use when odd."}}}),
+    );
+    assert_eq!(status, 200, "{r}");
+    assert_eq!(
+        r["output"]["adopted"][0]["id"], "other-skills:skill/odd-one",
+        "{r}"
+    );
+    let (_, item) = ui.get("/api/source-item?source=other-skills&key=skill/odd-one");
+    let text = item["output"]["text"].as_str().unwrap();
+    assert!(
+        text.contains("name: odd-one") && text.contains("Even. Use when odd."),
+        "{text}"
+    );
+    assert!(text.contains(r#"tags: ["imported"]"#), "{text}");
+
     for bad in [
         json!({"skills": ["my-debugging"]}),
         json!({"into": "other-skills"}),
         json!({"into": "other-skills", "skills": ["--all"]}),
         json!({"into": "-x", "skills": ["a"]}),
         json!({"into": "other-skills", "skills": ["a"], "path": "--dir"}),
+        json!({"into": "other-skills", "skills": ["a"], "edits": ["x"]}),
     ] {
         let (status, _) = ui.post("/api/adopt", bad.clone());
         assert_eq!(status, 400, "{bad}");

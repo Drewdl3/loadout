@@ -5,6 +5,7 @@ pub mod commands;
 pub mod ctx;
 pub mod edit;
 pub mod engine;
+pub mod handover;
 pub mod layers;
 pub mod mcp;
 pub mod membership;

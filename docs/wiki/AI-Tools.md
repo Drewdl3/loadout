@@ -47,7 +47,8 @@ Loadout:
 
 If you already have your own skill with the same name as one Loadout
 would install, yours is left alone and `lo doctor` tells you about the
-clash.
+clash. The exception is a skill you shared with `lo adopt`; see
+[Sharing skills](Sharing-Skills.md#what-happens-to-your-originals).
 
 ## Limiting an item to some tools
 

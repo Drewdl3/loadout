@@ -17,9 +17,32 @@ under Loadout's data folder, not any checkout of the repo you may have). It
 won't show in Browse skills yet; find it under **Create & edit → Not shared
 yet**, where you can keep editing it and open the pull request later.
 
-Already have skills in `~/.claude/skills` or another tool's folder? Use
-**Share skills you already have** (or `lo adopt`) to copy them into a
-source instead of retyping them.
+Already have skills in `~/.claude/skills` or another tool's folder (say, a
+set you installed from someone's repo)? Use **Share skills you already
+have** (or `lo adopt`) to copy them into a source instead of retyping them.
+Tick the ones you want, then **Next: review**: rename them, sharpen their
+descriptions and set tags, author, mode or roles before they go in.
+**For all of them** applies tags (say `community`) or an author to every
+skill at once. Then open one pull request for them all.
+
+From the terminal:
+
+```sh
+lo adopt                                         # what could be adopted
+lo adopt --into payments-skills --skill tdd --skill Grill_Me=grill-me \
+  --tag imported --author "Ada Lovelace"
+lo export-source payments-skills -m "Add our debugging skills"
+```
+
+### What happens to your originals
+
+Adopting copies a skill; your original stays where it was until the
+source actually ships the skill (its pull request merged, your next sync).
+Then `lo sync` moves the original to a backup in Loadout's data folder,
+removes other tools' links to it, and installs the shared version, so
+no tool ends up with two copies. If you changed the original since adopting
+it, sync leaves it alone and warns you. `lo adopt --restore <name>` puts an
+original back.
 
 ## What a skill looks like
 

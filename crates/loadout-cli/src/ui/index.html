@@ -1336,46 +1336,138 @@ function newSkill(sources, source) {
     el("div", { class: "row", style: "margin-top:14px" }, el("button", { class: "btn primary", onclick: create }, "Create skill")), result);
 }
 
+// "Share skills you already have": pick skills found in your AI tools (or
+// a folder), review them (rename, describe, tag, …), then add them to a
+// source's working copy, ready for a pull request.
 async function adoptSkills(sources, source) {
-  const into = el("select", { "aria-label": "Destination source" }, sources.map(s => el("option", { value: s.name, selected: s.name === source }, s.name)));
+  const into = el("select", { "aria-label": "Destination source" }, srcOptions(sources, source));
   const folder = el("input", { type: "text", class: "grow", placeholder: "Your AI tools' skills folders, or a folder like ~/work/repo/.claude/skills", "aria-label": "Folder" });
   const found = el("div");
-  const result = el("div");
-  let boxes = [];
+  const step = el("div");
+  let candidates = [], boxes = [];
+  const MODES = [["", "source default"], ["default-on", "default-on: installed, can be turned off"], ["default-off", "default-off: people opt in"], ["required", "required: can't be turned off"]];
+  const modeSelect = (first) => el("select", { "aria-label": "Mode" }, (first ? [first, ...MODES.slice(1)] : MODES).map(([v, l]) => el("option", { value: v }, l)));
   const look = async () => {
     try {
       const r = await api("/api/adopt" + (folder.value.trim() ? "?path=" + encodeURIComponent(folder.value.trim()) : ""));
-      boxes = [];
-      found.replaceChildren(r.candidates.length ? el("div", {}, r.candidates.map(c => {
-        const box = el("input", { type: "checkbox", disabled: !!c.problem, "aria-label": c.name });
-        if (!c.problem) boxes.push([box, c.name]);
+      candidates = r.candidates; boxes = [];
+      found.replaceChildren(candidates.length ? el("div", {}, candidates.map(c => {
+        // A name that isn't kebab-case can be fixed in the review step.
+        const blocked = c.problem && !c.suggested_name;
+        const box = el("input", { type: "checkbox", disabled: !!blocked || !!c.already, "aria-label": c.name });
+        if (!blocked && !c.already) boxes.push([box, c]);
+        const note = c.already || c.problem;
         return el("label", { style: "display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)" }, box,
           el("div", { style: "min-width:0" },
             el("div", {}, el("span", { class: "mono" }, c.name), " ", el("span", { class: "pill" }, c.found_in)),
             c.description ? el("div", { class: "muted" }, c.description) : null,
-            el("div", { class: c.problem ? "warn" : "mono muted", style: "font-size:11.5px;overflow-wrap:anywhere" }, c.problem || c.path)));
+            note ? el("div", { class: blocked ? "warn" : "muted", style: "font-size:12px" }, note) : null,
+            el("div", { class: "mono faint", style: "font-size:11.5px;overflow-wrap:anywhere" }, c.path)));
       })) : el("p", { class: "muted" }, "No skills found that Loadout doesn't already manage."));
+      const all = el("label", { class: "row muted" }, el("input", { type: "checkbox", "aria-label": "Select all", onchange: e => boxes.forEach(([b]) => (b.checked = e.target.checked)) }), "Select all");
+      step.replaceChildren(boxes.length ? el("div", { class: "row", style: "margin-top:14px" }, all, el("span", { class: "grow" }),
+        el("button", { class: "btn primary", onclick: review }, "Next: review")) : null);
     } catch (e) { toast(e.message, true); }
   };
-  const adopt = async () => {
-    const skills = boxes.filter(([b]) => b.checked).map(([, n]) => n);
-    if (!skills.length) { toast("Select at least one skill", true); return; }
-    try {
-      const r = await api("/api/adopt", { into: into.value, skills, path: folder.value.trim() });
-      result.replaceChildren(
-        ...r.adopted.map(a => createdCard(r.source, "skill/" + a.name, a.path)),
-        ...r.skipped.map(s => el("div", { class: "warn" }, `Skipped ${s.name}: ${s.reason}`)),
-        r.adopted.length ? el("p", { class: "muted" }, "Once the source ships them, move your originals aside so the next sync installs the shared versions.") : null);
-      await look();
-    } catch (e) { toast(e.message, true); }
+  // One card per picked skill; only the fields you change are rewritten.
+  const review = () => {
+    const picked = boxes.filter(([b]) => b.checked).map(([, c]) => c);
+    if (!picked.length) { toast("Select at least one skill", true); return; }
+    const rows = picked.map(c => {
+      const init = { name: c.suggested_name || c.name, description: c.description || "", tags: (c.tags || []).join(", "), author: c.author || "", mode: c.mode || "", roles: (c.roles || []).join(", ") };
+      const f = {
+        name: el("input", { type: "text", class: "mono", "aria-label": "Name" }),
+        description: el("textarea", { style: "min-height:56px", "aria-label": "Description" }),
+        tags: el("input", { type: "text", placeholder: "specs, writing", "aria-label": "Tags" }),
+        author: el("input", { type: "text", placeholder: "Who wrote it", "aria-label": "Author" }),
+        mode: modeSelect(),
+        roles: el("input", { type: "text", placeholder: "empty: everyone", "aria-label": "Roles" }),
+      };
+      for (const [k, i] of Object.entries(f)) i.value = init[k];
+      const card = el("div", { class: "card", style: "margin-top:10px" },
+        el("div", { class: "row" }, el("b", { class: "mono" }, c.name), el("span", { class: "pill" }, c.found_in)),
+        el("div", { class: "form-grid", style: "margin-top:8px" },
+          el("label", {}, "Name"), f.name, c.suggested_name ? el("div", { class: "hint" }, `Was ${c.name}, which isn't kebab-case.`) : null,
+          el("label", {}, "Description"), f.description, el("div", { class: "hint" }, "What it does, then \"Use when …\"."),
+          el("label", {}, "Tags"), f.tags,
+          el("label", {}, "Author"), el("div", { class: "row nowrap" }, f.author, meButton(f.author)),
+          el("label", {}, "Mode"), f.mode,
+          el("label", {}, "Only for roles"), f.roles));
+      return { c, init, f, card };
+    });
+    // Fields set here apply to every skill below: tags are added, the rest replace.
+    const shared = { tags: el("input", { type: "text", placeholder: "e.g. community", "aria-label": "Tags for all" }), author: el("input", { type: "text", placeholder: "Who wrote them", "aria-label": "Author for all" }),
+      mode: modeSelect(["", "leave as is"]), roles: el("input", { type: "text", placeholder: "leave as is", "aria-label": "Roles for all" }) };
+    const applyAll = () => {
+      const tags = list(shared.tags.value);
+      if (tags.some(t => !KEBAB.test(t))) { toast("Tags: kebab-case words.", true); return; }
+      for (const { f } of rows) {
+        if (tags.length) f.tags.value = [...new Set([...list(f.tags.value), ...tags])].join(", ");
+        if (shared.author.value.trim()) f.author.value = shared.author.value.trim();
+        if (shared.mode.value) f.mode.value = shared.mode.value;
+        if (shared.roles.value.trim()) f.roles.value = list(shared.roles.value).join(", ");
+      }
+      toast(`Applied to ${rows.length} skill${rows.length === 1 ? "" : "s"}`);
+    };
+    const add = async () => {
+      const renames = {}, edits = {}, names = new Set();
+      for (const { c, init, f } of rows) {
+        const name = f.name.value.trim();
+        if (!KEBAB.test(name)) { toast(`${name || c.name}: names are kebab-case (lowercase words joined by -).`, true); f.name.focus(); return; }
+        if (names.has(name)) { toast(`Two skills are named ${name}`, true); return; }
+        names.add(name);
+        if (name !== c.name) renames[c.name] = name;
+        const fields = {};
+        const now = { description: f.description.value.trim().replace(/\s+/g, " "), tags: f.tags.value, author: f.author.value.trim(), mode: f.mode.value, roles: f.roles.value };
+        for (const k of Object.keys(now)) {
+          const was = k === "description" ? init[k].trim().replace(/\s+/g, " ") : init[k];
+          if (["tags", "roles"].includes(k) ? list(now[k]).join(",") === list(was).join(",") : now[k] === was) continue;
+          fields[k] = ["tags", "roles"].includes(k) ? list(now[k]) : now[k];
+        }
+        if (fields.tags && fields.tags.some(t => !KEBAB.test(t))) { toast(`${name}: tags are kebab-case words.`, true); return; }
+        if (Object.keys(fields).length) edits[name] = fields;
+      }
+      try {
+        const r = await api("/api/adopt", { into: into.value, skills: rows.map(({ c }) => c.name), renames, edits, path: folder.value.trim() });
+        await look();
+        step.replaceChildren(adoptedCard(r));
+      } catch (e) { toast(e.message, true); }
+    };
+    step.replaceChildren(
+      el("h3", { style: "margin-top:18px" }, `Review ${rows.length} skill${rows.length === 1 ? "" : "s"}`),
+      el("p", { class: "muted" }, "Rename them, sharpen descriptions and tag them before they go into the source. Nothing is shared until the pull request is merged."),
+      el("div", { class: "card" },
+        el("b", {}, "For all of them"),
+        el("div", { class: "form-grid", style: "margin-top:8px" },
+          el("label", {}, "Add tags"), shared.tags,
+          el("label", {}, "Author"), el("div", { class: "row nowrap" }, shared.author, meButton(shared.author)),
+          el("label", {}, "Mode"), shared.mode,
+          el("label", {}, "Only for roles"), shared.roles),
+        el("div", { class: "row", style: "margin-top:8px" }, el("button", { class: "btn", onclick: applyAll }, "Apply to all"))),
+      ...rows.map(r => r.card),
+      el("div", { class: "row", style: "margin-top:14px" }, el("button", { class: "btn ghost", onclick: look }, "Back"), el("span", { class: "grow" }),
+        "Add to source", into, el("button", { class: "btn primary", onclick: add }, "Add to source")));
   };
   openDrawer(el("h2", {}, "Share skills you already have"),
-    el("p", { class: "muted" }, "Skills in your AI tools that Loadout didn't install (or in a folder you name). Adding them copies them into a source's working copy, so you can share them through a pull request."),
+    el("p", { class: "muted" }, "Skills in your AI tools that Loadout didn't install (or in a folder you name). Adding them copies them into a source's working copy, so you can share them through a pull request. Once the source ships them, the next sync moves your originals aside, so you don't end up with two of each."),
     el("div", { class: "row" }, folder, el("button", { class: "btn", onclick: look }, "Look")),
-    found,
-    el("div", { class: "row", style: "margin-top:14px" }, "Add to source", into, el("button", { class: "btn primary", onclick: adopt }, "Add selected to source")),
-    result);
+    found, step);
   await look();
+}
+
+// What `lo adopt` did: each skill (open it in the editor) and one pull
+// request for them all.
+function adoptedCard(r) {
+  const msg = el("input", { type: "text", class: "grow", value: r.adopted.length === 1 ? `Add skill/${r.adopted[0].name}` : `Add ${r.adopted.length} skills`, "aria-label": "Pull request title" });
+  return el("div", { class: "card", style: "margin-top:14px" },
+    r.adopted.length ? el("div", { class: "ok" }, `Added to ${r.source}:`) : null,
+    r.adopted.map(a => el("div", { class: "row" }, el("span", { class: "mono" }, "skill/" + a.name), a.renamed_from ? el("span", { class: "faint" }, `(was ${a.renamed_from})`) : null,
+      el("span", { class: "grow" }), el("button", { class: "btn ghost", onclick: () => editItem(r.source, "skill/" + a.name) }, "Edit"))),
+    r.skipped.map(s => el("div", { class: "warn" }, `Skipped ${s.name}: ${s.reason}`)),
+    (r.warnings || []).map(w => el("div", { class: "warn" }, w)),
+    r.adopted.length ? [
+      el("div", { class: "muted", style: "margin-top:8px" }, "They're in your working copy (", el("a", { href: "#Edit", onclick: e => { e.preventDefault(); show("Edit"); } }, "Create & edit → Not shared yet"), "). Once the source ships them, the next sync moves your originals aside."),
+      el("div", { class: "row", style: "margin-top:8px" }, msg, el("button", { class: "btn primary", onclick: () => exportPr(r.source, msg.value) }, "Open pull request"))] : null);
 }
 
 // Ready-made templates for the New template form. The first mirrors

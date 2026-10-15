@@ -2,13 +2,14 @@
 //! skills directory, or any folder) into a source, so the team can share
 //! them through Loadout.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::Args;
+use loadout_core::frontmatter_edit as fe;
 use loadout_git::Git;
 use loadout_model::frontmatter::Document;
 use loadout_model::id::validate_item_name;
@@ -18,6 +19,7 @@ use loadout_targets::owned::OwnedFile;
 use loadout_targets::{TargetTable, expand_path};
 use schemars::JsonSchema;
 use serde::Serialize;
+use serde_json::{Map, Value};
 
 use crate::ctx::{Ctx, Report};
 use crate::{exit, work};
@@ -38,12 +40,30 @@ pub struct AdoptArgs {
     /// Or: a local checkout of a source repo to copy the skills into.
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
-    /// Adopt this skill (repeatable). In a terminal you're asked instead.
-    #[arg(long = "skill", value_name = "NAME")]
+    /// Adopt this skill (repeatable); `NAME=NEW` adopts it under a new
+    /// name. In a terminal you're asked instead.
+    #[arg(long = "skill", value_name = "NAME[=NEW]")]
     pub skills: Vec<String>,
-    /// Adopt every skill found.
+    /// Adopt every skill found (except ones already adopted or shipped).
     #[arg(long, conflicts_with = "skills")]
     pub all: bool,
+    /// Add this tag to every adopted skill (repeatable).
+    #[arg(long = "tag", value_name = "TAG")]
+    pub tags: Vec<String>,
+    /// Set the author of every adopted skill.
+    #[arg(long, value_name = "NAME")]
+    pub author: Option<String>,
+    /// Set the mode of every adopted skill (`default-on`, `default-off`,
+    /// `required`).
+    #[arg(long, value_name = "MODE")]
+    pub mode: Option<String>,
+    /// Per-skill frontmatter edits as JSON, `{"<new name>": {fields}}`
+    /// (the web UI's review step).
+    #[arg(long, value_name = "JSON", hide = true)]
+    pub edits: Option<String>,
+    /// Put back an adopted skill's original that `lo sync` moved aside.
+    #[arg(long, value_name = "NAME", conflicts_with_all = ["into", "dir", "skills", "all", "paths"])]
+    pub restore: Option<String>,
 }
 
 /// A skill found on disk that Loadout doesn't manage.
@@ -59,12 +79,34 @@ pub struct Candidate {
     /// Why it can't be adopted as is (e.g. a name that isn't kebab-case).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub problem: Option<String>,
+    /// A kebab-case name to adopt it under, when its own isn't.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_name: Option<String>,
+    /// Why it's probably already shared: adopted into a source and waiting
+    /// for it to ship, or a source already ships a skill of this name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub already: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    /// `applies_to.role`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<String>,
+    /// False when its SKILL.md frontmatter can't be read.
+    #[serde(skip)]
+    readable: bool,
 }
 
 /// One adopted skill.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct Adopted {
     pub name: String,
+    /// Its name where it was found, when it was renamed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub renamed_from: Option<String>,
     /// `<source>:skill/<name>`.
     pub id: String,
     /// Where it was copied from.
@@ -95,18 +137,32 @@ pub struct AdoptReport {
     /// Written to the source's working clone (`--into`), ready for
     /// `lo export-source`.
     pub working_clone: bool,
+    /// `--restore`: the original put back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restored: Option<crate::handover::Restored>,
     pub warnings: Vec<String>,
 }
 
 impl Report for AdoptReport {
     fn human(&self, out: &mut String) -> std::fmt::Result {
+        if let Some(r) = &self.restored {
+            writeln!(out, "Put {} back at {}.", r.name, r.path)?;
+            for l in &r.links {
+                writeln!(out, "  re-linked {l}")?;
+            }
+            return Ok(());
+        }
         let Some(source) = &self.source else {
             if self.candidates.is_empty() {
                 return writeln!(out, "No skills found that Loadout doesn't already manage.");
             }
             writeln!(out, "Skills you could adopt into a source:")?;
             for c in &self.candidates {
-                let note = c.problem.as_deref().map(|p| format!("  [{p}]"));
+                let note = c
+                    .problem
+                    .as_deref()
+                    .or(c.already.as_deref())
+                    .map(|p| format!("  [{p}]"));
                 writeln!(
                     out,
                     "  {:<28} {:<12} {}{}",
@@ -126,7 +182,12 @@ impl Report for AdoptReport {
         } else {
             writeln!(out, "Adopted into {source}:")?;
             for a in &self.adopted {
-                writeln!(out, "  {:<28} from {}", a.id, a.from)?;
+                let renamed = a
+                    .renamed_from
+                    .as_deref()
+                    .map(|r| format!(" (was {r})"))
+                    .unwrap_or_default();
+                writeln!(out, "  {:<28} from {}{renamed}", a.id, a.from)?;
             }
         }
         for s in &self.skipped {
@@ -146,7 +207,7 @@ impl Report for AdoptReport {
             }
             writeln!(
                 out,
-                "Once your source ships them, move the originals aside so `lo sync` can install the shared versions."
+                "Once your source ships them, `lo sync` moves your originals aside (`lo adopt --restore <name>` puts one back)."
             )?;
         }
         Ok(())
@@ -159,7 +220,20 @@ impl Report for AdoptReport {
 
 pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
     let mut warnings = Vec::new();
-    let candidates = if args.paths.is_empty() {
+    if let Some(name) = &args.restore {
+        let restored = crate::handover::restore(&ctx.paths, name, &mut warnings)?;
+        ctx.emit(&AdoptReport {
+            candidates: Vec::new(),
+            source: None,
+            adopted: Vec::new(),
+            skipped: Vec::new(),
+            working_clone: false,
+            restored: Some(restored),
+            warnings,
+        })?;
+        return Ok(exit::OK);
+    }
+    let mut candidates = if args.paths.is_empty() {
         installed(ctx, &mut warnings)?
     } else {
         let mut found = Vec::new();
@@ -168,6 +242,8 @@ pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
         }
         found
     };
+    mark_already(ctx, &mut candidates)?;
+    let edits = edits(&args)?;
     if args.into.is_none() && args.dir.is_none() {
         if !args.skills.is_empty() || args.all {
             bail!("say where: --into <source> or --dir <path>");
@@ -178,6 +254,7 @@ pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
             adopted: Vec::new(),
             skipped: Vec::new(),
             working_clone: false,
+            restored: None,
             warnings,
         })?;
         return Ok(exit::OK);
@@ -200,14 +277,46 @@ pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
 
     let mut adopted = Vec::new();
     let mut skipped = Vec::new();
-    for c in picked {
-        match copy_into(ctx, &dest, &source, &c, &mut warnings) {
-            Ok(a) => adopted.push(a),
+    let mut handovers = crate::handover::AdoptedFile::load(&ctx.paths.adopted_file())?;
+    for (c, new_name) in picked {
+        if args.all
+            && let Some(why) = &c.already
+        {
+            skipped.push(Skipped {
+                name: c.name.clone(),
+                reason: why.clone(),
+            });
+            continue;
+        }
+        let name = new_name.unwrap_or_else(|| c.name.clone());
+        let mut fields = edits.get(&name).cloned().unwrap_or_default();
+        shared_fields(&args, &c, &mut fields);
+        match copy_into(ctx, &dest, &source, &c, &name, &fields, &mut warnings) {
+            Ok(a) => {
+                // Only a tool's own folder is handed over; a folder given
+                // as a path (a project's, say) is the user's business.
+                if c.found_in != "path"
+                    && let Ok(hash) = crate::handover::folder_hash(Path::new(&c.path))
+                {
+                    handovers.record(crate::handover::Adoption {
+                        name: name.clone(),
+                        source: source.clone(),
+                        original: PathBuf::from(&c.path),
+                        content_hash: hash,
+                        backup: None,
+                        links: Vec::new(),
+                    });
+                }
+                adopted.push(a);
+            }
             Err(e) => skipped.push(Skipped {
                 name: c.name.clone(),
                 reason: format!("{e:#}"),
             }),
         }
+    }
+    if !adopted.is_empty() {
+        handovers.save(&ctx.paths.adopted_file())?;
     }
     let code = if adopted.is_empty() && !skipped.is_empty() {
         exit::ERROR
@@ -220,26 +329,36 @@ pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
         adopted,
         skipped,
         working_clone,
+        restored: None,
         warnings,
     })?;
     Ok(code)
 }
 
-/// The selection: `--all`, `--skill`, or a multi-select in a terminal.
-fn pick(ctx: &Ctx, args: &AdoptArgs, candidates: &[Candidate]) -> Result<Vec<Candidate>> {
+/// The selection, each with its new name if renamed: `--all`, `--skill`,
+/// or a multi-select in a terminal.
+fn pick(
+    ctx: &Ctx,
+    args: &AdoptArgs,
+    candidates: &[Candidate],
+) -> Result<Vec<(Candidate, Option<String>)>> {
     if args.all {
-        return Ok(candidates.to_vec());
+        return Ok(candidates.iter().map(|c| (c.clone(), None)).collect());
     }
     if !args.skills.is_empty() {
         let mut out = Vec::new();
-        for name in &args.skills {
+        for spec in &args.skills {
+            let (name, new) = match spec.split_once('=') {
+                Some((n, new)) => (n, Some(new.trim().to_owned())),
+                None => (spec.as_str(), None),
+            };
             let c = candidates
                 .iter()
-                .find(|c| c.name == *name)
+                .find(|c| c.name == name)
                 .with_context(|| {
                     format!("no skill named {name:?} found (`lo adopt` lists them)")
                 })?;
-            out.push(c.clone());
+            out.push((c.clone(), new.filter(|n| *n != c.name)));
         }
         return Ok(out);
     }
@@ -254,7 +373,7 @@ fn pick(ctx: &Ctx, args: &AdoptArgs, candidates: &[Candidate]) -> Result<Vec<Can
         .map(|c| {
             let desc = c.description.as_deref().unwrap_or("");
             let desc: String = desc.chars().take(60).collect();
-            match &c.problem {
+            match c.problem.as_ref().or(c.already.as_ref()) {
                 Some(p) => format!("{} ({}) — {p}", c.name, c.found_in),
                 None => format!("{} ({}) — {desc}", c.name, c.found_in),
             }
@@ -265,7 +384,10 @@ fn pick(ctx: &Ctx, args: &AdoptArgs, candidates: &[Candidate]) -> Result<Vec<Can
         .items(&labels)
         .interact()
         .context("reading your choice")?;
-    Ok(chosen.into_iter().map(|i| candidates[i].clone()).collect())
+    Ok(chosen
+        .into_iter()
+        .map(|i| (candidates[i].clone(), None))
+        .collect())
 }
 
 /// Skills in every known tool's skills directory that Loadout didn't
@@ -341,48 +463,87 @@ fn candidate(dir: &Path, found_in: &str, warnings: &mut Vec<String>) -> Candidat
     let meta = std::fs::read_to_string(dir.join(SKILL_FILE))
         .map_err(anyhow::Error::from)
         .and_then(|t| Ok(Document::split(&t)?.parse::<ItemMeta>()?));
-    let (description, mut problem) = match meta {
-        Ok(m) => (m.description, None),
+    let readable = meta.is_ok();
+    let (meta, mut problem) = match meta {
+        Ok(m) => (m, None),
         Err(e) => {
             warnings.push(format!("{}: {e:#}", dir.join(SKILL_FILE).display()));
-            (None, Some("SKILL.md frontmatter can't be read".to_owned()))
+            (
+                ItemMeta::default(),
+                Some("SKILL.md frontmatter can't be read".to_owned()),
+            )
         }
     };
+    let mut suggested_name = None;
     if problem.is_none() && validate_item_name(&name).is_err() {
-        problem = Some("name isn't kebab-case; rename the folder first".to_owned());
+        problem = Some("name isn't kebab-case; adopt it under a new name".to_owned());
+        suggested_name = Some(kebab(&name)).filter(|n| validate_item_name(n).is_ok());
     }
+    let block = meta.loadout.unwrap_or_default();
     Candidate {
         name,
-        description,
+        description: meta.description,
         path: dir.display().to_string(),
         found_in: found_in.to_owned(),
         problem,
+        suggested_name,
+        already: None,
+        tags: block.tags,
+        author: block.author,
+        mode: block
+            .mode
+            .and_then(|m| serde_json::to_value(m).ok())
+            .and_then(|v| v.as_str().map(str::to_owned)),
+        roles: block.applies_to.get("role").cloned().unwrap_or_default(),
+        readable,
     }
 }
 
+/// Copies `c` into the source at `dest` as `name`, then applies `fields`
+/// (see [`crate::edit::apply_fields`]) to its SKILL.md.
 fn copy_into(
     ctx: &Ctx,
     dest: &Path,
     source: &str,
     c: &Candidate,
+    name: &str,
+    fields: &Map<String, Value>,
     warnings: &mut Vec<String>,
 ) -> Result<Adopted> {
-    if let Some(p) = &c.problem {
-        bail!("{p}");
+    if !c.readable {
+        bail!("SKILL.md frontmatter can't be read");
     }
-    let key = ItemKey::new(ItemKind::Skill, c.name.clone())?;
+    if validate_item_name(name).is_err() {
+        if name == c.name {
+            bail!("name isn't kebab-case; adopt it under a new name (`--skill {name}=<new-name>`)");
+        }
+        bail!("{name:?} isn't kebab-case");
+    }
+    let key = ItemKey::new(ItemKind::Skill, name)?;
     work::check_editable(ctx, dest, &key)?;
     let (item_rel, _, _) = work::item_path(dest, &key)?;
     let item_dir = work::join(dest, &item_rel);
     if item_dir.exists() {
         bail!("{source} already has {item_rel}");
     }
-    let (files, tree_warnings) = crate::scan::read_tree(Path::new(&c.path))?;
+    let (mut files, tree_warnings) = crate::scan::read_tree(Path::new(&c.path))?;
     warnings.extend(
         tree_warnings
             .into_iter()
             .map(|w| format!("{}: {w}", c.name)),
     );
+    // Edit SKILL.md before writing anything, so a bad edit writes nothing.
+    if let Some(main) = files.iter_mut().find(|f| f.path == SKILL_FILE) {
+        let mut text = String::from_utf8(main.contents.clone()).context("SKILL.md isn't UTF-8")?;
+        if name != c.name {
+            text = fe::set_top_key(&text, "name", Some(name));
+        }
+        if !fields.is_empty() {
+            text = crate::edit::apply_fields(&text, &Value::Object(fields.clone()))
+                .with_context(|| format!("editing {name}"))?;
+        }
+        main.contents = text.into_bytes();
+    }
     let mut names = Vec::new();
     for f in &files {
         let path = work::join(&item_dir, &f.path);
@@ -393,10 +554,98 @@ fn copy_into(
     }
     names.sort();
     Ok(Adopted {
-        name: c.name.clone(),
-        id: format!("{source}:skill/{}", c.name),
+        name: name.to_owned(),
+        renamed_from: (name != c.name).then(|| c.name.clone()),
+        id: format!("{source}:skill/{name}"),
         from: c.path.clone(),
         path: item_dir.display().to_string(),
         files: names,
     })
+}
+
+/// Marks candidates that are probably shared already: adopted and waiting
+/// for their source to ship them, or shipped by a source under the same
+/// name.
+fn mark_already(ctx: &Ctx, candidates: &mut [Candidate]) -> Result<()> {
+    let adopted = crate::handover::AdoptedFile::load(&ctx.paths.adopted_file())?;
+    let resolved = crate::state::Resolved::load(&ctx.paths.resolved_file())?.unwrap_or_default();
+    for c in candidates.iter_mut() {
+        if let Some(a) = adopted.pending(Path::new(&c.path)) {
+            c.already = Some(format!(
+                "adopted into {} as skill/{}; moved aside once {} ships it",
+                a.source, a.name, a.source
+            ));
+        } else if let Some(i) = resolved
+            .items
+            .iter()
+            .find(|i| i.kind == ItemKind::Skill && i.name == c.name)
+        {
+            c.already = Some(format!("{} already ships skill/{}", i.source, i.name));
+        }
+    }
+    Ok(())
+}
+
+/// `--edits`: the frontmatter fields to set on each adopted skill, by its
+/// new name.
+fn edits(args: &AdoptArgs) -> Result<BTreeMap<String, Map<String, Value>>> {
+    match &args.edits {
+        Some(json) => {
+            serde_json::from_str(json).context("--edits must be a JSON object of objects")
+        }
+        None => Ok(BTreeMap::new()),
+    }
+}
+
+/// Adds `--tag` to the skill's tags, and fills in `--author` and `--mode`
+/// where its own edits don't set them.
+fn shared_fields(args: &AdoptArgs, c: &Candidate, fields: &mut Map<String, Value>) {
+    if !args.tags.is_empty() {
+        let mut tags: Vec<String> = match fields.get("tags").and_then(Value::as_array) {
+            Some(a) => a
+                .iter()
+                .filter_map(|t| t.as_str().map(str::to_owned))
+                .collect(),
+            None => c.tags.clone(),
+        };
+        for t in &args.tags {
+            if !tags.contains(t) {
+                tags.push(t.clone());
+            }
+        }
+        fields.insert("tags".into(), Value::from(tags));
+    }
+    if let Some(a) = &args.author {
+        fields
+            .entry("author")
+            .or_insert_with(|| Value::from(a.clone()));
+    }
+    if let Some(m) = &args.mode {
+        fields
+            .entry("mode")
+            .or_insert_with(|| Value::from(m.clone()));
+    }
+}
+
+/// `My_Skill Name` → `my-skill-name`.
+fn kebab(name: &str) -> String {
+    let mut out = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn kebab_cases_folder_names() {
+        assert_eq!(super::kebab("Bad_Name"), "bad-name");
+        assert_eq!(super::kebab("  My  Skill!! "), "my-skill");
+        assert_eq!(super::kebab("___"), "");
+    }
 }

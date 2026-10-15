@@ -159,7 +159,13 @@ New users can also get here from **Start here** → **I have a share code**.
   layers until the pull request is merged and you update.
 - **New skill**: a form that writes the `SKILL.md` for you.
 - **Share skills you already have**: finds skills already in your AI tools'
-  folders and copies the ones you pick into a source.
+  folders and copies the ones you pick into a source. Skills you've already
+  adopted, or that a source already ships, are marked and can't be picked
+  twice. **Next: review** shows a card per skill to rename it (a name that
+  isn't kebab-case gets a suggestion), sharpen its description, and set
+  tags, author, mode and roles; **For all of them** adds tags or sets the
+  author, mode or roles on every card at once. **Add to source** writes them
+  to the working copy, and one **Open pull request** shares them all.
 - **Edit an item** in any source. The editor has a **Form** for the usual
   fields (description, author, co-authors, tags, mode, roles, locked, the
   instructions) and a **Whole file** view. The form only rewrites the fields

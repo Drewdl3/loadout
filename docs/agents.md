@@ -114,6 +114,12 @@ Skills that already exist somewhere (in `~/.claude/skills`, a project's
 `lo adopt` lists the ones Loadout doesn't manage, and
 `lo adopt [<folder>] --dir <checkout> --skill <name>` (or `--into <source>`
 for a working clone) copies them with their supporting files.
+`--skill <name>=<new-name>` renames one on the way in, and `--tag`,
+`--author` and `--mode` set those fields on every adopted skill. Originals
+adopted from an AI tool's folder are recorded in `adopted.json` in the data
+folder; once their source ships them, `lo sync` moves each unchanged one to
+`adopted/<name>` there (removing other tools' links to it) so tools don't
+see the skill twice, and `lo adopt --restore <name>` puts it back.
 
 ### `LOADOUT.md`
 

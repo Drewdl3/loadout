@@ -162,6 +162,12 @@ impl Paths {
     pub fn resolved_file(&self) -> PathBuf {
         self.data_dir.join("resolved.json")
     }
+
+    /// `adopted.json`: skills `lo adopt` copied into a source, whose
+    /// originals `lo sync` moves aside once the source ships them.
+    pub fn adopted_file(&self) -> PathBuf {
+        self.data_dir.join("adopted.json")
+    }
 }
 
 #[cfg(test)]

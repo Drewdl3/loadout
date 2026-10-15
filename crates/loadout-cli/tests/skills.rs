@@ -5,10 +5,12 @@
 
 mod common;
 
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
 
 use common::{Sandbox, skill};
 use loadout_git::fixture::FixtureRepo;
+#[cfg(unix)]
 use serde_json::Value;
 
 /// A plain skills repo (no `LOADOUT.md`), the way people publish skills.
@@ -33,6 +35,7 @@ fn plain_repo(s: &Sandbox) -> FixtureRepo {
 }
 
 /// Writes a skill folder as `npx skills` installed it.
+#[cfg(unix)]
 fn installed(dir: &Path, name: &str, description: &str, extra: Option<(&str, &str)>) {
     std::fs::create_dir_all(dir.join(name)).unwrap();
     std::fs::write(dir.join(name).join("SKILL.md"), skill(name, description)).unwrap();
@@ -78,6 +81,7 @@ fn world() -> (Sandbox, FixtureRepo) {
     (s, repo)
 }
 
+#[cfg(unix)]
 fn skill_named<'a>(inv: &'a Value, name: &str) -> &'a Value {
     inv["skills"]
         .as_array()
@@ -87,6 +91,7 @@ fn skill_named<'a>(inv: &'a Value, name: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("no {name} in {inv:#}"))
 }
 
+#[cfg(unix)]
 fn tools(skill: &Value) -> Vec<String> {
     let mut t: Vec<String> = skill["copies"]
         .as_array()
@@ -100,6 +105,7 @@ fn tools(skill: &Value) -> Vec<String> {
     t
 }
 
+#[cfg(unix)]
 fn store(s: &Sandbox, p: PathBuf) -> bool {
     std::fs::read_link(&p).is_ok_and(|t| t.starts_with(s.data.join("store")))
 }

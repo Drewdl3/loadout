@@ -75,6 +75,14 @@ impl Report for ApplyReport {
                 if s.cached { "  (cached)" } else { "" }
             )?;
         }
+        for h in &self.handed_over {
+            let verb = if self.dry_run { "would move" } else { "moved" };
+            writeln!(
+                out,
+                "{} now comes from {}: {verb} your original {} to {}",
+                h.item, h.source, h.from, h.backup
+            )?;
+        }
         for t in &self.targets {
             writeln!(
                 out,

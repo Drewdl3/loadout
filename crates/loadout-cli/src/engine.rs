@@ -10,7 +10,8 @@ use loadout_core::resolve::{self, Candidate, Resolution};
 use loadout_git::Git;
 use loadout_model::config::normalize_url;
 use loadout_model::{
-    Config, Groups, ItemId, ItemKind, LinkMode, Lock, LockedItem, LockedSource, Profile, SourceSub,
+    Config, Groups, ItemId, ItemKey, ItemKind, LinkMode, Lock, LockedItem, LockedSource, Profile,
+    SourceSub,
 };
 use loadout_targets::fsutil::atomic_write;
 use loadout_targets::owned::OwnedFile;
@@ -144,6 +145,10 @@ pub struct ApplyReport {
     /// Updates refused because their commits aren't signed by an allowed
     /// signer; the previous pin is kept.
     pub signature_failures: Vec<String>,
+    /// Adopted skills whose originals were moved aside now that their
+    /// source ships them (`lo adopt --restore` puts one back).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub handed_over: Vec<crate::handover::HandedOver>,
     /// `sync` inside a repo with a project layer: that layer's result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<Box<ApplyReport>>,
@@ -488,6 +493,22 @@ pub fn apply(ctx: &Ctx, config: &Config, opts: Options) -> Result<ApplyReport> {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
+
+    // Adopted skills the sources now ship: move the originals aside first,
+    // so the plan installs the shared versions where they were.
+    if ctx.paths.project.is_none() {
+        let ships = |source: &str, name: &str| {
+            let Ok(key) = ItemKey::new(ItemKind::Skill, name) else {
+                return false;
+            };
+            ItemId::new(source, key.clone()).is_ok_and(|id| items.contains_key(&id))
+                && overall
+                    .get(&key)
+                    .is_some_and(|r| r.enabled && r.winner.is_some())
+        };
+        report.handed_over =
+            crate::handover::hand_over(&ctx.paths, ships, opts.dry_run, &mut report.warnings)?;
+    }
 
     // Plan every target first, then record what we are about to own
     // (crash safety): if the process dies while placing

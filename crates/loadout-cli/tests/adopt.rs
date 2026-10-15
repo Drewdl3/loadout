@@ -103,9 +103,24 @@ fn copies_the_whole_skill_into_a_checkout_and_never_overwrites() {
         .map(|k| k["reason"].as_str().unwrap())
         .collect();
     assert!(reasons[0].contains("kebab-case"), "{reasons:?}");
+    // `--all` leaves out what's already adopted; naming it still tries.
     assert!(
-        reasons[1].contains("already has skills/my-debugging"),
+        reasons[1].contains("adopted into team-skills as skill/my-debugging"),
         "{reasons:?}"
+    );
+    let out = s.run(&[
+        "adopt",
+        "--dir",
+        checkout.to_str().unwrap(),
+        "--skill",
+        "my-debugging",
+        "--json",
+    ]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(
+        out.stdout.contains("already has skills/my-debugging"),
+        "{}",
+        out.stdout
     );
     assert_eq!(
         std::fs::read_to_string(checkout.join("skills/my-debugging/SKILL.md")).unwrap(),
@@ -139,4 +154,155 @@ fn adopts_from_a_folder_into_a_working_clone() {
     let path = std::path::PathBuf::from(r["adopted"][0]["path"].as_str().unwrap());
     assert!(path.join("SKILL.md").is_file());
     assert!(path.starts_with(s.data.join("work")), "{}", path.display());
+}
+
+#[test]
+fn renames_and_edits_on_the_way_in() {
+    let (s, team) = world();
+    let checkout = std::path::PathBuf::from(team.url());
+    let listed = s.json(&["adopt"]);
+    assert_eq!(listed["candidates"][0]["suggested_name"], "bad-name");
+    let edits = r#"{"bad-name": {"description": "Better. Use when testing.", "tags": ["mine"]}}"#;
+    let r = s.json(&[
+        "adopt",
+        "--dir",
+        checkout.to_str().unwrap(),
+        "--skill",
+        "Bad_Name=bad-name",
+        "--skill",
+        "my-debugging",
+        "--tag",
+        "imported",
+        "--author",
+        "Ada",
+        "--mode",
+        "default-off",
+        "--edits",
+        edits,
+    ]);
+    assert_eq!(r["adopted"][0]["id"], "team-skills:skill/bad-name", "{r:#}");
+    assert_eq!(r["adopted"][0]["renamed_from"], "Bad_Name");
+    let bad = std::fs::read_to_string(checkout.join("skills/bad-name/SKILL.md")).unwrap();
+    assert!(bad.starts_with("---\nname: bad-name\n"), "{bad}");
+    assert!(bad.contains("Better. Use when testing."), "{bad}");
+    assert!(bad.contains(r#"tags: ["mine","imported"]"#), "{bad}");
+    assert!(bad.contains(r#"author: "Ada""#), "{bad}");
+    assert!(bad.contains(r#"mode: "default-off""#), "{bad}");
+    let mine = std::fs::read_to_string(checkout.join("skills/my-debugging/SKILL.md")).unwrap();
+    assert!(mine.contains(r#"tags: ["imported"]"#), "{mine}");
+    assert!(mine.contains("How I debug flaky tests."), "{mine}");
+    let audit = s.run(&["audit", "--path", checkout.to_str().unwrap()]);
+    assert_eq!(audit.code, 0, "{}", audit.stdout);
+
+    // A bad edit writes nothing.
+    std::fs::remove_dir_all(checkout.join("skills/my-debugging")).unwrap();
+    let out = s.run(&[
+        "adopt",
+        "--dir",
+        checkout.to_str().unwrap(),
+        "--skill",
+        "my-debugging",
+        "--mode",
+        "sometimes",
+        "--json",
+    ]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(!checkout.join("skills/my-debugging").exists());
+}
+
+/// Adopts `my-debugging` into the team's repo and publishes it, with a
+/// second tool (Pi) linking to the original the way `npx skills` does.
+#[cfg(unix)]
+fn adopted_and_published() -> (Sandbox, FixtureRepo, std::path::PathBuf) {
+    let (s, team) = world();
+    let pi = s.home.join(".pi/agent/skills");
+    std::fs::create_dir_all(&pi).unwrap();
+    std::os::unix::fs::symlink(
+        "../../../.claude/skills/my-debugging",
+        pi.join("my-debugging"),
+    )
+    .unwrap();
+    let checkout = std::path::PathBuf::from(team.url());
+    s.ok(&[
+        "adopt",
+        "--dir",
+        checkout.to_str().unwrap(),
+        "--skill",
+        "my-debugging",
+    ]);
+    let r = s.json(&["adopt"]);
+    let c = &r["candidates"][1];
+    assert_eq!(c["name"], "my-debugging");
+    assert!(
+        c["already"]
+            .as_str()
+            .unwrap()
+            .contains("adopted into team-skills"),
+        "{c:#}"
+    );
+    team.commit("adopt my-debugging");
+    (s, team, pi)
+}
+
+#[cfg(unix)]
+#[test]
+fn sync_moves_the_original_aside_once_the_source_ships_it() {
+    let (s, _team, pi) = adopted_and_published();
+    let original = s.skills_dir().join("my-debugging");
+
+    // The update is held for review (a manual source): nothing moves yet.
+    let held = s.run(&["sync", "--json"]);
+    let held: Value = serde_json::from_str(&held.stdout).unwrap();
+    assert!(held["handed_over"].is_null(), "{held:#}");
+    assert!(original.join("SKILL.md").is_file() && !original.is_symlink());
+
+    let r = s.json(&["approve", "team-skills"]);
+    let h = &r["handed_over"][0];
+    assert_eq!(h["source"], "team-skills", "{r:#}");
+    assert_eq!(h["links"][0], pi.join("my-debugging").display().to_string());
+    let backup = s.data.join("adopted/my-debugging");
+    assert_eq!(h["backup"], backup.display().to_string());
+    assert!(backup.join("refs/notes.md").is_file());
+    // Loadout's copy replaced it, in both tools (Pi is installed here).
+    for at in [&original, &pi.join("my-debugging")] {
+        let to = std::fs::read_link(at).unwrap();
+        assert!(to.starts_with(s.data.join("store")), "{}", to.display());
+    }
+    assert!(
+        !r["warnings"].to_string().contains("not managed by Loadout"),
+        "{r:#}"
+    );
+    // Nothing left to adopt, and the next sync has nothing to hand over.
+    assert_eq!(names(&s.json(&["adopt"])), ["Bad_Name"]);
+    assert!(s.json(&["sync"])["handed_over"].is_null());
+
+    // Putting it back needs the place free.
+    let out = s.run(&["adopt", "--restore", "my-debugging"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("in use"), "{}", out.stderr);
+    s.ok(&["disable", "team-skills:skill/my-debugging"]);
+    s.ok(&["sync"]);
+    let r = s.json(&["adopt", "--restore", "my-debugging"]);
+    assert_eq!(r["restored"]["path"], original.display().to_string());
+    assert!(original.join("refs/notes.md").is_file() && !original.is_symlink());
+    assert!(pi.join("my-debugging/SKILL.md").is_file());
+    assert!(!backup.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn an_original_changed_since_adopting_is_left_alone() {
+    let (s, _team, pi) = adopted_and_published();
+    let original = s.skills_dir().join("my-debugging");
+    std::fs::write(original.join("refs/notes.md"), "more notes\n").unwrap();
+    s.run(&["sync"]);
+    let r = s.json(&["approve", "team-skills"]);
+    assert!(r["handed_over"].is_null(), "{r:#}");
+    let warnings = r["warnings"].to_string();
+    assert!(
+        warnings.contains("changed since you adopted it"),
+        "{warnings}"
+    );
+    assert!(!original.is_symlink());
+    assert!(pi.join("my-debugging").is_symlink());
 }

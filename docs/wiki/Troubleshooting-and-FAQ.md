@@ -56,7 +56,17 @@ or **Use this version** in the web UI.
 That's deliberate. Loadout never touches files it didn't create. If you have
 `~/.claude/skills/write-spec` of your own, Loadout's `write-spec` isn't
 installed for that tool and `lo doctor` reports the clash. Rename or remove
-yours, or share it with `lo adopt`.
+yours, or share it with `lo adopt`: once the source ships it, `lo sync`
+moves yours aside for you.
+
+## "My adopted skill disappeared from my skills folder"
+
+After you adopt a skill and its source ships it, `lo sync` moves your
+original to `adopted/` under Loadout's data folder and removes other
+tools' links to it, so each tool has one copy: the shared one. If you
+changed the original after adopting it, it's left alone and sync warns you
+instead. `lo adopt --restore <name>` puts an original back (turn the shared
+one off first with `lo disable`).
 
 ## "An update is stuck" (exit codes 2 and 3)
 

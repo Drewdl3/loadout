@@ -404,8 +404,25 @@ impl Ui<'_> {
             _ => {}
         }
         args.extend(["--into", into]);
-        for s in &skills {
+        // `renames: {old: new}` adopts under a new name; `edits: {new:
+        // fields}` sets frontmatter fields (the review step).
+        let specs: Vec<String> = skills
+            .iter()
+            .map(|s| match body["renames"][*s].as_str().map(str::trim) {
+                Some(new) if !new.is_empty() && new != *s => format!("{s}={new}"),
+                _ => (*s).to_owned(),
+            })
+            .collect();
+        for s in &specs {
             args.extend(["--skill", s]);
+        }
+        let edits = match &body["edits"] {
+            Value::Null => None,
+            e @ Value::Object(_) => Some(e.to_string()),
+            _ => return json_reply(400, &json!({"error": "\"edits\": {name: fields} expected"})),
+        };
+        if let Some(e) = &edits {
+            args.extend(["--edits", e]);
         }
         self.loadout(&args)
     }

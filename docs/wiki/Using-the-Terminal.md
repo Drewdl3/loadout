@@ -85,6 +85,8 @@ lo export                      # your exact setup as a short code (lo1_…)
 lo import lo1_… --dry-run      # see what it would change first
 lo import lo1_…                # reproduce someone's setup
 lo adopt                       # list skills in your AI tools you could share
+lo adopt --into payments-skills --all --tag imported --author "Ada Lovelace"
+lo adopt --restore write-spec   # put back an original that sync moved aside
 lo template list
 lo export-source payments-skills -m "Improve write-spec"   # open a pull request
 ```

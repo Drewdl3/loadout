@@ -84,3 +84,35 @@ jobs:
           set -euo pipefail
           test -f "$LOADOUT_HOME/.claude/skills/hello/SKILL.md"
           lo status
+
+  e2e:
+    name: e2e (web UI in a browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p loadout-cli
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run
+        working-directory: e2e
+        run: npx playwright test
+      - name: Keep screenshots and the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: |
+            e2e/screenshots
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 14

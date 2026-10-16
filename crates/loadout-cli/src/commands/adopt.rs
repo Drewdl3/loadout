@@ -137,18 +137,20 @@ pub struct AdoptReport {
     /// Written to the source's working clone (`--into`), ready for
     /// `lo export-source`.
     pub working_clone: bool,
-    /// `--restore`: the original put back.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub restored: Option<crate::handover::Restored>,
+    /// `--restore`: the originals put back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restored: Vec<crate::handover::Restored>,
     pub warnings: Vec<String>,
 }
 
 impl Report for AdoptReport {
     fn human(&self, out: &mut String) -> std::fmt::Result {
-        if let Some(r) = &self.restored {
-            writeln!(out, "Put {} back at {}.", r.name, r.path)?;
-            for l in &r.links {
-                writeln!(out, "  re-linked {l}")?;
+        if !self.restored.is_empty() {
+            for r in &self.restored {
+                writeln!(out, "Put {} back at {}.", r.name, r.path)?;
+                for l in &r.links {
+                    writeln!(out, "  re-linked {l}")?;
+                }
             }
             return Ok(());
         }
@@ -228,7 +230,7 @@ pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
             adopted: Vec::new(),
             skipped: Vec::new(),
             working_clone: false,
-            restored: Some(restored),
+            restored,
             warnings,
         })?;
         return Ok(exit::OK);
@@ -254,7 +256,7 @@ pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
             adopted: Vec::new(),
             skipped: Vec::new(),
             working_clone: false,
-            restored: None,
+            restored: Vec::new(),
             warnings,
         })?;
         return Ok(exit::OK);
@@ -329,7 +331,7 @@ pub fn run(ctx: &Ctx, args: AdoptArgs) -> Result<u8> {
         adopted,
         skipped,
         working_clone,
-        restored: None,
+        restored: Vec::new(),
         warnings,
     })?;
     Ok(code)
@@ -477,7 +479,7 @@ fn candidate(dir: &Path, found_in: &str, warnings: &mut Vec<String>) -> Candidat
     let mut suggested_name = None;
     if problem.is_none() && validate_item_name(&name).is_err() {
         problem = Some("name isn't kebab-case; adopt it under a new name".to_owned());
-        suggested_name = Some(kebab(&name)).filter(|n| validate_item_name(n).is_ok());
+        suggested_name = Some(crate::scan::kebab(&name)).filter(|n| validate_item_name(n).is_ok());
     }
     let block = meta.loadout.unwrap_or_default();
     Candidate {
@@ -627,25 +629,13 @@ fn shared_fields(args: &AdoptArgs, c: &Candidate, fields: &mut Map<String, Value
     }
 }
 
-/// `My_Skill Name` → `my-skill-name`.
-fn kebab(name: &str) -> String {
-    let mut out = String::new();
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
-        } else if !out.is_empty() && !out.ends_with('-') {
-            out.push('-');
-        }
-    }
-    out.trim_end_matches('-').to_owned()
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
     fn kebab_cases_folder_names() {
-        assert_eq!(super::kebab("Bad_Name"), "bad-name");
-        assert_eq!(super::kebab("  My  Skill!! "), "my-skill");
-        assert_eq!(super::kebab("___"), "");
+        use crate::scan::kebab;
+        assert_eq!(kebab("Bad_Name"), "bad-name");
+        assert_eq!(kebab("  My  Skill!! "), "my-skill");
+        assert_eq!(kebab("___"), "");
     }
 }

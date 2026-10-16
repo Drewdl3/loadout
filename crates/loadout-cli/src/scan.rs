@@ -95,6 +95,9 @@ struct Scope<'a> {
 pub struct Overrides {
     pub layer: Option<String>,
     pub group: Option<String>,
+    /// The source's URL. A repo without `LOADOUT.md` at its root is read as
+    /// a plain skills repo named after it (see [`plain_name`]).
+    pub url: Option<String>,
 }
 
 /// Parses `LOADOUT.md` and all supported items under `root`.
@@ -105,6 +108,11 @@ pub fn scan_source(root: &Path) -> Result<ScannedSource> {
 /// [`scan_source`] with subscription overrides applied to the defaults.
 pub fn scan_source_with(root: &Path, overrides: &Overrides) -> Result<ScannedSource> {
     let manifest_path = root.join(MANIFEST_FILE);
+    if let Some(url) = &overrides.url
+        && std::fs::symlink_metadata(&manifest_path).is_err()
+    {
+        return scan_plain(root, url, overrides);
+    }
     let text = std::fs::read_to_string(&manifest_path)
         .with_context(|| format!("source has no readable {MANIFEST_FILE} at its root"))?;
     let manifest = ManifestDoc::parse(&text)
@@ -142,6 +150,149 @@ pub fn scan_source_with(root: &Path, overrides: &Overrides) -> Result<ScannedSou
     scan_nested(root, "", &manifest.nested, &mut out)?;
     out.items.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(out)
+}
+
+/// The source name of a plain skills repo: `owner-repo` for a hosted repo
+/// (`https://github.com/acme/skills.git` → `acme-skills`), else the folder
+/// name.
+pub fn plain_name(url: &str) -> String {
+    let trimmed = url.trim_end_matches('/');
+    let trimmed = trimmed.strip_suffix(".git").unwrap_or(trimmed);
+    let parts: Vec<&str> = trimmed
+        .split(['/', '\\', ':'])
+        .filter(|p| !p.is_empty())
+        .collect();
+    let hosted = url.contains("://") || url.contains('@');
+    let take = if hosted { 2 } else { 1 };
+    let name = parts[parts.len().saturating_sub(take)..]
+        .iter()
+        .map(|p| kebab(p))
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if loadout_model::id::validate_source_name(&name).is_ok() {
+        name
+    } else {
+        "plain-skills".to_owned()
+    }
+}
+
+/// `My_Skill Name` → `my-skill-name`.
+pub fn kebab(name: &str) -> String {
+    let mut out = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').to_owned()
+}
+
+/// The `LOADOUT.md` a plain skills repo is read with.
+pub fn plain_manifest(url: &str) -> String {
+    let description = format!("Skills found in {url} (it has no {MANIFEST_FILE})");
+    format!(
+        "---\nloadout: 1\nname: {}\nlayer: {}\ndescription: {}\n---\n",
+        plain_name(url),
+        loadout_model::layer::USER_LAYER,
+        serde_json::Value::from(description),
+    )
+}
+
+/// The text of the source's `LOADOUT.md` in `dir`, or for a plain skills
+/// repo, the one it's read with.
+pub fn manifest_text(dir: &Path, url: &str) -> Result<String> {
+    match std::fs::read_to_string(dir.join(MANIFEST_FILE)) {
+        Ok(t) => Ok(t),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(plain_manifest(url)),
+        Err(e) => Err(e).with_context(|| format!("reading {}", dir.join(MANIFEST_FILE).display())),
+    }
+}
+
+/// Most directory levels searched for skills in a plain repo.
+const MAX_PLAIN_DEPTH: usize = 6;
+
+/// A repo with no `LOADOUT.md`: every folder holding a `SKILL.md`, at any
+/// depth (e.g. `skills/engineering/tdd/`), is a skill named after its
+/// folder, at the `user` layer unless the subscription says otherwise.
+fn scan_plain(root: &Path, url: &str, overrides: &Overrides) -> Result<ScannedSource> {
+    let name = plain_name(url);
+    let manifest = ManifestDoc::parse(&plain_manifest(url))?.manifest;
+    let defaults = LoadoutBlock {
+        layer: Some(
+            overrides
+                .layer
+                .clone()
+                .unwrap_or_else(|| manifest.layer.clone()),
+        ),
+        group: overrides.group.clone(),
+        ..LoadoutBlock::default()
+    };
+    let mut out = ScannedSource {
+        default_layer: defaults.layer.clone().unwrap_or_default(),
+        default_group: defaults.group.clone(),
+        manifest,
+        items: Vec::new(),
+        nested: Vec::new(),
+        warnings: Vec::new(),
+    };
+    let mut found = Vec::new();
+    find_skill_dirs(root, "", 0, &mut found)?;
+    for (rel, dir) in found {
+        let folder = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if out.items.iter().any(|i| i.id.key().name() == folder) {
+            out.warnings.push(format!(
+                "{rel}: another skill is also named {folder:?}, skipped"
+            ));
+            continue;
+        }
+        match scan_dir_item(&name, ItemKind::Skill, SKILL_FILE, &folder, &dir, &defaults) {
+            Ok((item, warnings)) => {
+                out.warnings
+                    .extend(warnings.into_iter().map(|w| format!("{rel}: {w}")));
+                out.items.push(item);
+            }
+            Err(e) => out.warnings.push(format!("{rel}: {e:#}, skipped")),
+        }
+    }
+    out.items.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(out)
+}
+
+/// Folders under `dir` holding a `SKILL.md`, not looking inside them, nor
+/// in hidden folders, `node_modules` or links.
+fn find_skill_dirs(
+    dir: &Path,
+    rel: &str,
+    depth: usize,
+    out: &mut Vec<(String, PathBuf)>,
+) -> Result<()> {
+    if depth > MAX_PLAIN_DEPTH {
+        return Ok(());
+    }
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .with_context(|| format!("reading {}", dir.display()))?
+        .collect::<Result<_, _>>()?;
+    entries.sort_by_key(|e| e.file_name());
+    for e in entries {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') || name == "node_modules" || !e.file_type()?.is_dir() {
+            continue;
+        }
+        let path = e.path();
+        let child = format!("{rel}{name}");
+        if path.join(SKILL_FILE).is_file() {
+            out.push((child, path));
+        } else {
+            find_skill_dirs(&path, &format!("{child}/"), depth + 1, out)?;
+        }
+    }
+    Ok(())
 }
 
 fn scan_items(s: &Scope<'_>, out: &mut ScannedSource) -> Result<()> {
@@ -661,6 +812,7 @@ mod tests {
             &Overrides {
                 layer: Some("role".into()),
                 group: Some("developer".into()),
+                ..Overrides::default()
             },
         )
         .unwrap();
@@ -681,6 +833,53 @@ mod tests {
         assert_eq!(h1, scan_source(r).unwrap().items[0].content_hash);
         write(r, "skills/a/SKILL.md", "---\n---\ntwo");
         assert_ne!(h1, scan_source(r).unwrap().items[0].content_hash);
+    }
+
+    #[test]
+    fn plain_repo_names() {
+        assert_eq!(
+            plain_name("https://github.com/acme/skills.git"),
+            "acme-skills"
+        );
+        assert_eq!(
+            plain_name("git@github.com:acme/Team_Skills.git"),
+            "acme-team-skills"
+        );
+        assert_eq!(plain_name("/tmp/x/my-skills/"), "my-skills");
+        assert_eq!(plain_name("https://example.com/___"), "example-com");
+    }
+
+    #[test]
+    fn a_repo_without_a_manifest_is_read_as_plain_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let r = tmp.path();
+        let skill = |n: &str| format!("---\nname: {n}\ndescription: {n}.\n---\nDo {n}.\n");
+        write(r, "skills/engineering/tdd/SKILL.md", &skill("tdd"));
+        write(r, "skills/engineering/tdd/refs/more.md", "more");
+        write(r, "skills/writing/grill-me/SKILL.md", &skill("grill-me"));
+        write(r, "other/tdd/SKILL.md", &skill("tdd"));
+        write(r, ".hidden/x/SKILL.md", &skill("x"));
+        write(r, "README.md", "# Skills");
+        let o = Overrides {
+            url: Some("https://git.example.com/acme/skills.git".into()),
+            ..Overrides::default()
+        };
+        let s = scan_source_with(r, &o).unwrap();
+        assert_eq!(s.manifest.name, "acme-skills");
+        assert_eq!(s.default_layer, "user");
+        let ids: Vec<String> = s.items.iter().map(|i| i.id.to_string()).collect();
+        assert_eq!(ids, ["acme-skills:skill/grill-me", "acme-skills:skill/tdd"]);
+        // Two folders named tdd: the first by path wins, the other is skipped.
+        assert!(!s.items[1].files.iter().any(|f| f.path == "refs/more.md"));
+        assert!(
+            s.warnings
+                .iter()
+                .any(|w| w.starts_with("skills/engineering/tdd: another skill")),
+            "{:?}",
+            s.warnings
+        );
+        // Without a URL it's still an error.
+        assert!(scan_source(r).is_err());
     }
 
     #[test]
@@ -823,6 +1022,7 @@ mod tests {
         let o = Overrides {
             layer: Some("org".into()),
             group: Some("eng".into()),
+            ..Overrides::default()
         };
         let s = scan_source_with(r, &o).unwrap();
         assert_eq!(s.default_layer, "org");

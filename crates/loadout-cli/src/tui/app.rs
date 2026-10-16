@@ -13,6 +13,7 @@ pub trait Loadout {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Catalog,
+    Computer,
     Sources,
     Templates,
     Groups,
@@ -20,8 +21,9 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [
+    pub const ALL: [Tab; 6] = [
         Tab::Catalog,
+        Tab::Computer,
         Tab::Sources,
         Tab::Templates,
         Tab::Groups,
@@ -31,6 +33,7 @@ impl Tab {
     pub fn title(self) -> &'static str {
         match self {
             Tab::Catalog => "Catalog",
+            Tab::Computer => "Computer",
             Tab::Sources => "Sources",
             Tab::Templates => "Templates",
             Tab::Groups => "Groups",
@@ -152,6 +155,9 @@ pub struct App<'a> {
     pub filters: [Option<String>; 5],
     pub item_sel: usize,
     pub why: Option<Value>,
+    // Computer: every skill on this computer (`lo skills`).
+    pub skills: Vec<Value>,
+    pub skill_sel: usize,
     // Sources.
     pub sources: Vec<(usize, Value)>,
     pub company_config: Option<String>,
@@ -185,6 +191,8 @@ impl<'a> App<'a> {
             filters: Default::default(),
             item_sel: 0,
             why: None,
+            skills: Vec::new(),
+            skill_sel: 0,
             sources: Vec::new(),
             company_config: None,
             source_sel: 0,
@@ -204,6 +212,10 @@ impl<'a> App<'a> {
     /// Reloads everything from `lo`.
     pub fn refresh(&mut self) {
         self.load_items();
+        self.skills = self.output(&["skills", "list"])["skills"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         let (sources, company_config) = tree(&self.loadout.sources());
         self.sources = sources;
         self.company_config = company_config;
@@ -331,6 +343,7 @@ impl<'a> App<'a> {
     fn clamp(&mut self) {
         let n = self.visible().len();
         self.item_sel = self.item_sel.min(n.saturating_sub(1));
+        self.skill_sel = self.skill_sel.min(self.skills.len().saturating_sub(1));
         self.source_sel = self.source_sel.min(self.sources.len().saturating_sub(1));
         self.template_sel = self
             .template_sel
@@ -362,7 +375,7 @@ impl<'a> App<'a> {
             Key::Char('?') => self.help = true,
             Key::Tab => self.switch(1),
             Key::BackTab => self.switch(Tab::ALL.len() - 1),
-            Key::Char(c @ '1'..='5') => self.tab = Tab::ALL[c as usize - '1' as usize],
+            Key::Char(c @ '1'..='6') => self.tab = Tab::ALL[c as usize - '1' as usize],
             Key::Char('S') => {
                 self.act(&["sync"]);
             }
@@ -372,6 +385,7 @@ impl<'a> App<'a> {
             }
             _ => match self.tab {
                 Tab::Catalog => self.on_catalog_key(key),
+                Tab::Computer => self.on_computer_key(key),
                 Tab::Sources => self.on_sources_key(key),
                 Tab::Templates => self.on_templates_key(key),
                 Tab::Groups => self.on_groups_key(key),
@@ -699,6 +713,64 @@ impl<'a> App<'a> {
         }
     }
 
+    /// Whether `m` can manage the skill in one go: it has copies of its own
+    /// (not in a project) and they're all the same.
+    pub fn manageable(skill: &Value) -> bool {
+        let hashes: std::collections::BTreeSet<&str> = skill["copies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|c| c["managed"] != true && c["scope"] == "global")
+            .filter_map(|c| c["content_hash"].as_str())
+            .collect();
+        hashes.len() == 1
+    }
+
+    fn on_computer_key(&mut self, key: Key) {
+        let Some(sk) = self.skills.get(self.skill_sel).cloned() else {
+            return;
+        };
+        let name = sk["name"].as_str().unwrap_or_default().to_owned();
+        match key {
+            Key::Down | Key::Char('j') => {
+                self.skill_sel = (self.skill_sel + 1).min(self.skills.len().saturating_sub(1));
+            }
+            Key::Up => self.skill_sel = self.skill_sel.saturating_sub(1),
+            Key::Char(c @ ('m' | 'c')) => {
+                if !Self::manageable(&sk) {
+                    let why = if sk["copies"]
+                        .as_array()
+                        .is_some_and(|c| c.iter().all(|c| c["managed"] == true))
+                    {
+                        "already managed"
+                    } else {
+                        "its copies differ or are in a project; use `lo skills manage --path` or the web UI"
+                    };
+                    self.message = Some((format!("{name}: {why}"), true));
+                    return;
+                }
+                let mut args = vec!["skills", "manage", name.as_str()];
+                if c == 'c' {
+                    args.push("--copy");
+                }
+                self.act(&args);
+            }
+            Key::Char('u') => {
+                if sk["handed_over"] == true {
+                    self.act(&["skills", "unmanage", &name]);
+                } else {
+                    self.message = Some((
+                        format!(
+                            "{name}: Loadout didn't replace a copy of yours; turn it off in the catalog instead"
+                        ),
+                        true,
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn on_groups_key(&mut self, key: Key) {
         match key {
             Key::Down | Key::Char('j') => {
@@ -820,6 +892,17 @@ pub(crate) mod tests {
                 "subscribe" if args.contains(&"--dry-run") => json!({"sources": [
                     {"name": "team", "layer": "team", "group": "t", "commit": "cccccccc", "items": [{"kind": "skill", "name": "x"}]}
                 ], "warnings": []}),
+                "skills" => json!({"home": "/h", "skills": [
+                    {"name": "my-notes", "state": "unmanaged", "description": "How I take notes.", "handed_over": false,
+                     "copies": [{"path": "/h/.claude/skills/my-notes", "scope": "global", "managed": false, "content_hash": "blake3:1",
+                                 "seen_by": [{"tool": "claude-code", "scope": "global", "path": "/h/.claude/skills/my-notes", "link": false}]}],
+                     "issues": [{"kind": "missing", "tools": ["codex"]}]},
+                    {"name": "tdd", "state": "managed", "item": "acme-skills:skill/tdd", "handed_over": true,
+                     "copies": [{"path": "/d/store/tdd", "scope": "global", "managed": true, "item": "acme-skills:skill/tdd", "content_hash": "blake3:2",
+                                 "seen_by": [{"tool": "claude-code", "scope": "global", "path": "/h/.claude/skills/tdd", "link": true},
+                                             {"tool": "codex", "scope": "global", "path": "/h/.agents/skills/tdd", "link": true}]}],
+                     "issues": []}
+                ]}),
                 "why" => json!({"winner": "eng:skill/style", "enabled": true, "candidates": [
                     {"id": "eng:skill/style", "layer": "org", "group": "eng", "rank": 10, "outcome": "winner"}]}),
                 _ => json!({"warnings": []}),
@@ -897,7 +980,7 @@ pub(crate) mod tests {
     #[test]
     fn preview_then_subscribe_and_sync() {
         let (mut a, calls) = app();
-        a.on_key(Key::Char('2'));
+        a.on_key(Key::Char('3'));
         assert_eq!(a.tab, Tab::Sources);
         assert_eq!(a.sources[1].0, 1, "eng is nested under squad");
         a.on_key(Key::Char('n'));
@@ -923,7 +1006,7 @@ pub(crate) mod tests {
     #[test]
     fn template_form_builds_the_use_command() {
         let (mut a, calls) = app();
-        a.on_key(Key::Char('3'));
+        a.on_key(Key::Char('4'));
         a.on_key(Key::Enter);
         // Submit from the destination row with `team` empty: refused.
         keys(&mut a, &[Key::Up, Key::Enter]);
@@ -958,9 +1041,9 @@ pub(crate) mod tests {
     #[test]
     fn groups_status_and_global_keys() {
         let (mut a, calls) = app();
-        keys(&mut a, &[Key::Char('4'), Key::Enter]);
+        keys(&mut a, &[Key::Char('5'), Key::Enter]);
         assert!(calls.borrow().contains(&"join product:billing".to_owned()));
-        keys(&mut a, &[Key::Char('5'), Key::Char('a')]);
+        keys(&mut a, &[Key::Char('6'), Key::Char('a')]);
         assert!(calls.borrow().contains(&"approve squad".to_owned()));
         a.on_key(Key::Char('S'));
         assert!(calls.borrow().contains(&"sync".to_owned()));
@@ -968,5 +1051,23 @@ pub(crate) mod tests {
         assert_eq!(a.tab, Tab::Catalog);
         a.on_key(Key::Char('q'));
         assert!(a.quit);
+    }
+
+    #[test]
+    fn computer_manages_and_unmanages() {
+        let (mut a, calls) = app();
+        let ran = |c: &str| calls.borrow().iter().any(|x| x == c);
+        keys(&mut a, &[Key::Char('2'), Key::Char('m')]);
+        assert!(ran("skills manage my-notes"));
+        keys(&mut a, &[Key::Char('c')]);
+        assert!(ran("skills manage my-notes --copy"));
+        // my-notes was never handed over: nothing to put back.
+        keys(&mut a, &[Key::Char('u')]);
+        assert!(!ran("skills unmanage my-notes"));
+        assert!(a.message.as_ref().unwrap().1);
+        keys(&mut a, &[Key::Down, Key::Char('m')]);
+        assert!(a.message.as_ref().unwrap().0.contains("already managed"));
+        keys(&mut a, &[Key::Char('u')]);
+        assert!(ran("skills unmanage tdd"));
     }
 }

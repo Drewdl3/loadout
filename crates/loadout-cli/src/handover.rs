@@ -266,48 +266,57 @@ pub struct Restored {
     pub links: Vec<String>,
 }
 
-/// Puts a handed-over original (and its links) back.
-pub fn restore(paths: &Paths, name: &str, warnings: &mut Vec<String>) -> Result<Restored> {
+/// Puts every handed-over original of `name` (and their links) back.
+pub fn restore(paths: &Paths, name: &str, warnings: &mut Vec<String>) -> Result<Vec<Restored>> {
     let file_path = paths.adopted_file();
     let mut file = AdoptedFile::load(&file_path)?;
-    let Some(i) = file
+    let moved: Vec<Adoption> = file
         .skills
         .iter()
-        .rposition(|a| a.name == name && a.backup.is_some())
-    else {
+        .filter(|a| a.name == name && a.backup.is_some())
+        .cloned()
+        .collect();
+    if moved.is_empty() {
         bail!("no adopted skill named {name:?} was moved aside");
-    };
-    let a = file.skills[i].clone();
-    let backup = a.backup.as_ref().expect("checked");
-    if std::fs::symlink_metadata(&a.original).is_ok() {
+    }
+    if let Some(a) = moved
+        .iter()
+        .find(|a| std::fs::symlink_metadata(&a.original).is_ok())
+    {
         bail!(
             "{} is in use (Loadout may have installed the shared skill/{name} there); \
              `lo disable` it or move it first",
             a.original.display()
         );
     }
-    move_dir(backup, &a.original).with_context(|| format!("restoring {}", a.original.display()))?;
-    let mut links = Vec::new();
-    for l in &a.links {
-        if std::fs::symlink_metadata(&l.path).is_ok() {
-            warnings.push(format!(
-                "{} is in use; didn't re-create its link",
-                l.path.display()
-            ));
-            continue;
+    let mut out = Vec::new();
+    for a in moved {
+        let backup = a.backup.as_ref().expect("filtered");
+        move_dir(backup, &a.original)
+            .with_context(|| format!("restoring {}", a.original.display()))?;
+        let mut links = Vec::new();
+        for l in &a.links {
+            if std::fs::symlink_metadata(&l.path).is_ok() {
+                warnings.push(format!(
+                    "{} is in use; didn't re-create its link",
+                    l.path.display()
+                ));
+                continue;
+            }
+            match relink(&l.target, &l.path) {
+                Ok(()) => links.push(l.path.display().to_string()),
+                Err(e) => warnings.push(format!("re-linking {}: {e}", l.path.display())),
+            }
         }
-        match relink(&l.target, &l.path) {
-            Ok(()) => links.push(l.path.display().to_string()),
-            Err(e) => warnings.push(format!("re-linking {}: {e}", l.path.display())),
-        }
+        file.skills.retain(|x| x != &a);
+        out.push(Restored {
+            name: name.to_owned(),
+            path: a.original.display().to_string(),
+            links,
+        });
     }
-    file.skills.remove(i);
     file.save(&file_path)?;
-    Ok(Restored {
-        name: name.to_owned(),
-        path: a.original.display().to_string(),
-        links,
-    })
+    Ok(out)
 }
 
 #[cfg(unix)]

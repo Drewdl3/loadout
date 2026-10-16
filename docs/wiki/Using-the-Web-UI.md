@@ -63,6 +63,28 @@ status, type, layer, source, group, role and tag. Each item has:
 Items show who wrote them (*By Ada, with Grace*), and the **Author** filter
 finds everything someone wrote or co-wrote.
 
+## My computer
+
+Every skill your AI tools can see, whether Loadout installed it or not:
+which tools have it, where it came from, and what's worth fixing (a tool
+that doesn't have it, copies that differ, a tool seeing two copies, your own
+copy blocking your team's version).
+
+- **Manage** follows the repo a skill came from (when its installer
+  recorded one), or copies it into your local skills. Either way, every AI
+  tool gets it and the old copies move aside. **Copy instead** always
+  copies. **Manage all** does every skill that can be managed in one go.
+- Skills one installer got from the same repo are grouped: **Follow
+  acme/skills** handles all of them.
+- When copies differ, open them and click **Keep this one**.
+- **Edit** opens a skill in your local skills in the editor; **Save &
+  install** applies the change at once.
+- **Stop managing** puts your originals back. A skill from one of your
+  sources has **Turn off** instead.
+- **Also look in a project folder** adds a project's skills to the list.
+
+See [Managing your skills](Managing-Your-Skills.md).
+
 ## Your layers
 
 The hierarchy view: every skill, tool connection, subagent and rule arranged

@@ -1,0 +1,14 @@
+{
+  "name": "loadout-e2e",
+  "private": true,
+  "description": "Browser tests for `lo ui`, each against a sandboxed home directory.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@types/node": "22.15.3"
+  }
+}

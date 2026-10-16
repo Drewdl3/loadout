@@ -360,7 +360,11 @@ pub fn preview(ctx: &Ctx, url: &str, git_ref: Option<&str>) -> Result<SubscribeP
                 continue;
             }
         };
-        let scanned = match crate::scan::scan_source(&dir) {
+        let overrides = crate::scan::Overrides {
+            url: Some(url.clone()),
+            ..Default::default()
+        };
+        let scanned = match crate::scan::scan_source_with(&dir, &overrides) {
             Ok(s) => s,
             Err(e) if via.is_none() => return Err(e.context(format!("{url} is not a source"))),
             Err(e) => {

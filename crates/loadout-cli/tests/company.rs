@@ -377,7 +377,7 @@ fn init_with_a_source_subscribes_to_it_and_its_upstreams() {
 }
 
 #[test]
-fn init_rejects_a_repo_without_loadout_md() {
+fn init_rejects_a_repo_without_loadout_md_or_skills() {
     let s = Sandbox::with_claude();
     let plain = FixtureRepo::init(s.root.join("remotes/plain"), s.git.clone());
     plain.write("README.md", "# Not a source\n");
@@ -385,8 +385,7 @@ fn init_rejects_a_repo_without_loadout_md() {
     let out = s.run(&["init", &plain.url(), "--non-interactive"]);
     assert_eq!(out.code, 1);
     assert!(
-        out.stderr
-            .contains("isn't a Loadout source or company config"),
+        out.stderr.contains("has no LOADOUT.md and no skills"),
         "{}",
         out.stderr
     );

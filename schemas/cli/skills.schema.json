@@ -1,0 +1,369 @@
+{
+  "$id": "https://github.com/Drewdl3/loadout/schemas/cli/skills.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Inventory",
+  "description": "`lo skills --json`.",
+  "type": "object",
+  "properties": {
+    "home": {
+      "description": "Your home folder, so paths can be shown as `~/…`.",
+      "type": "string"
+    },
+    "skills": {
+      "description": "By name.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Skill"
+      }
+    },
+    "folders": {
+      "description": "The folders that were looked in.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Folder"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "home",
+    "skills",
+    "folders",
+    "warnings"
+  ],
+  "$defs": {
+    "Skill": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/State"
+        },
+        "item": {
+          "description": "The item Loadout installs under this name (`source:skill/name`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "handed_over": {
+          "description": "Loadout moved your originals aside when it took this skill over;\n`lo skills unmanage` puts them back.",
+          "type": "boolean"
+        },
+        "copies": {
+          "description": "Each distinct folder: Loadout's copy, then the others.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Copy"
+          }
+        },
+        "issues": {
+          "description": "Things worth fixing, most important first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Issue"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "state",
+        "handed_over",
+        "copies",
+        "issues"
+      ]
+    },
+    "State": {
+      "description": "Where a skill stands overall.",
+      "oneOf": [
+        {
+          "description": "Every copy comes from Loadout.",
+          "type": "string",
+          "const": "managed"
+        },
+        {
+          "description": "Loadout installs it, but other copies are around too.",
+          "type": "string",
+          "const": "partly-managed"
+        },
+        {
+          "description": "Copied into a source, waiting for it to ship.",
+          "type": "string",
+          "const": "adopted"
+        },
+        {
+          "description": "No copy comes from Loadout.",
+          "type": "string",
+          "const": "unmanaged"
+        }
+      ]
+    },
+    "Copy": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The real folder (links followed).",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "managed": {
+          "description": "Loadout installed it.",
+          "type": "boolean"
+        },
+        "item": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "adopted_into": {
+          "description": "Copied into this source with `lo adopt`, not shipped yet.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "origin": {
+          "description": "Who installed it, when another tool recorded that.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Origin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "seen_by": {
+          "description": "The entries in the tools' folders that reach it.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Sighting"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "scope",
+        "managed",
+        "content_hash",
+        "seen_by"
+      ]
+    },
+    "Scope": {
+      "oneOf": [
+        {
+          "description": "A tool's own folder in your home directory.",
+          "type": "string",
+          "const": "global"
+        },
+        {
+          "description": "A project's folder (e.g. `<repo>/.claude/skills`).",
+          "type": "string",
+          "const": "project"
+        }
+      ]
+    },
+    "Origin": {
+      "description": "Where an unmanaged skill came from.",
+      "type": "object",
+      "properties": {
+        "installer": {
+          "description": "What installed it (`npx skills`).",
+          "type": "string"
+        },
+        "source": {
+          "description": "As the installer names it, e.g. `acme/skills`.",
+          "type": "string"
+        },
+        "url": {
+          "description": "A Git URL Loadout can follow.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "The skill's `SKILL.md` in that repo.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "installer",
+        "source"
+      ]
+    },
+    "Sighting": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "path": {
+          "description": "The entry in the tool's folder.",
+          "type": "string"
+        },
+        "link": {
+          "description": "It's a link to the copy.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tool",
+        "scope",
+        "path",
+        "link"
+      ]
+    },
+    "Issue": {
+      "oneOf": [
+        {
+          "description": "Something Loadout doesn't manage sits where it wants to install\nthis item, so these tools don't get Loadout's version.",
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "string"
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "blocked"
+            }
+          },
+          "required": [
+            "kind",
+            "item",
+            "tools"
+          ]
+        },
+        {
+          "description": "One tool sees several copies (e.g. a global and a project one).",
+          "type": "object",
+          "properties": {
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "shadowed"
+            }
+          },
+          "required": [
+            "kind",
+            "tools"
+          ]
+        },
+        {
+          "description": "More than one copy on this computer; `differ` when their content\nisn't the same.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "differ": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "copies"
+            }
+          },
+          "required": [
+            "kind",
+            "count",
+            "differ"
+          ]
+        },
+        {
+          "description": "Not managed, and these tools you use don't have it.",
+          "type": "object",
+          "properties": {
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "missing"
+            }
+          },
+          "required": [
+            "kind",
+            "tools"
+          ]
+        }
+      ]
+    },
+    "Folder": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "description": "Target id (`claude-code`, …).",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "path": {
+          "type": "string"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Loadout installs into this tool.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tool",
+        "scope",
+        "path",
+        "exists",
+        "enabled"
+      ]
+    }
+  }
+}

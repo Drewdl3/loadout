@@ -53,11 +53,22 @@ pub struct ExportSourceReport {
     pub pushed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pull_request: Option<PullRequest>,
+    /// The local source: the edits were committed in place and installed
+    /// (no branch, push or pull request).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub applied: bool,
     pub warnings: Vec<String>,
 }
 
 impl Report for ExportSourceReport {
     fn human(&self, out: &mut String) -> std::fmt::Result {
+        if self.applied {
+            return writeln!(
+                out,
+                "Saved your changes to {} and installed them.",
+                self.source
+            );
+        }
         match (&self.branch, &self.pull_request) {
             (None, _) => writeln!(
                 out,
@@ -101,9 +112,21 @@ pub fn run(ctx: &Ctx, args: ExportSourceArgs) -> Result<u8> {
         commit: None,
         pushed: false,
         pull_request: None,
+        applied: false,
         warnings: Vec::new(),
     };
     if args.prepare {
+        ctx.emit(&report)?;
+        return Ok(exit::OK);
+    }
+    if crate::local::is_local(&ctx.paths, &w.url) {
+        let Some(commit) = crate::local::commit(&git, &w.root, &args.message)? else {
+            bail!("no changes to {} to save", w.name);
+        };
+        report.commit = Some(commit);
+        let applied = crate::local::apply(ctx)?;
+        report.applied = true;
+        report.warnings = applied.warnings;
         ctx.emit(&report)?;
         return Ok(exit::OK);
     }

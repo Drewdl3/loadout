@@ -426,7 +426,7 @@ Exit codes: `0` ok, `1` error, `2` changes pending review, `3` audit blocked,
 
 | Command | |
 |---|---|
-| `lo init <url> [--non-interactive]` | Connect to a link someone shared. A source: preview it and its upstreams, subscribe, pick tools, first sync. A company config: discover your groups, pick tools, first sync. `--json` says which (`kind: source \| company_config`). |
+| `lo init <url> [--non-interactive]` | Connect to a link someone shared. A source: preview it and its upstreams, subscribe, pick tools, first sync. A company config: discover your groups, pick tools, first sync. `--json` says which (`kind: source \| company_config`). A plain repo of skill folders (no `LOADOUT.md`) is followed as a source named after its URL, at the `user` layer. |
 | `lo init --new-source [dir] [--layer s] [--rank n] [--group u] [--upstream url]... [--git-init] [--subscribe]` | Create a source (catalog). `--rank` suggests a rank for a layer of your own. `lo new-source` does the same without the Git steps. |
 | `lo init --new-company [dir] --company c [--layers name=rank,…] [--git-init]` | Create a company config, optionally with your own layer names and ranks. |
 | `lo init --project` | Set up a project layer in the current repo. |
@@ -466,7 +466,9 @@ Exit codes: `0` ok, `1` error, `2` changes pending review, `3` audit blocked,
 | `lo adopt [<path>...] [--into <source> \| --dir <path>] [--skill n[=new]]... [--all] [--tag t]... [--author a] [--mode m]` / `lo adopt --restore <name>` | Copy skills you already have (in your AI tools' skills folders, or a folder) into a source to share them; without `--into`/`--dir` it lists what it finds, marking ones already adopted or shipped. In a terminal you pick from a list. `n=new` renames, `--tag`/`--author`/`--mode` apply to every skill. Once the source ships them, `lo sync` moves the originals aside; `--restore` puts one back. |
 | `lo new-source [<dir>] [--layer s] [--group u] [--upstream url]... [--company-config]` | Scaffold a source (or company config) repo with an example skill, an `AGENTS.md` for AI agents and a CI audit workflow. |
 | `lo export-source <source> [-m msg]` | Commit edits made in a source's working clone to a `loadout/…` branch, push, open a PR. |
-| `lo tui` | Terminal UI. Catalog with search and filters (state, kind, source, role, tag), toggle/prefer/join with one key, `why` alongside; the sources tree with upstreams, preview then subscribe; templates; groups; pending reviews. `?` shows the keys. |
+| `lo skills [list] [--in <dir>]... [--issues]` | Every skill on this computer, in each AI tool's folder (and projects'), whether Loadout installed it or not: which tools have it, where it came from (`npx skills`' lock file), and what to fix (missing from a tool, copies that differ, a tool seeing two, your copy blocking a shared one). |
+| `lo skills manage <name>... \| --all [--copy] [--path <dir>]` / `lo skills unmanage <name>` | Put skills under Loadout: follow the repo they came from (only those skills on), or copy them into your local skills (`local-skills`, a source on this computer). Then every tool gets them and your originals move to a backup; `unmanage` puts them back. |
+| `lo tui` | Terminal UI. Catalog with search and filters (state, kind, source, role, tag), toggle/prefer/join with one key, `why` alongside; the skills on this computer (manage, copy, stop managing); the sources tree with upstreams, preview then subscribe; templates; groups; pending reviews. `?` shows the keys. |
 | `lo ui [--port N] [--no-open]` | Local web dashboard (127.0.0.1 only, per-run token). It covers everything above, plus: a catalog filtered by state, kind, layer, source, group, role and tag; the tree of sources and their upstreams; preview-then-subscribe; templates; and editing items and exporting them as PRs. |
 
 **Maintenance**
@@ -492,6 +494,9 @@ users land on **Start here**: a short tour and a checklist that follows their
 real setup (**Paste a link** someone shared or **Start your own** source,
 pick AI tools, update, browse).
 Every page has an "About this page" note, and a glossary explains the words.
+**My computer** lists every skill your AI tools can see, managed or not,
+with what's worth fixing, and manages them in a click (following the repo
+they came from, or copying them into your local skills).
 **Your layers** shows the hierarchy: the groups you're in from the broadest
 down to you, and under each layer the items it gives you, which ones replace
 a broader layer's version, and which were replaced by one closer to you. Its
@@ -580,6 +585,14 @@ See [`AGENTS.md`](AGENTS.md) for the layout, the checks and the rules for change
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+```
+
+The web UI also has browser tests: each starts `lo ui` against a sandboxed
+home and saves screenshots of what it saw to `e2e/screenshots/`.
+
+```sh
+cargo build -p loadout-cli
+cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
 
 Workspace layout:
